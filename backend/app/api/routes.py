@@ -78,3 +78,50 @@ def copilot(body:CopilotRequest):
 @router.get('/dashboard/statistics')
 def stats(db:Session=Depends(get_db)):
     cs=db.scalars(select(Complaint)).all(); counts=lambda field:{v:sum(1 for c in cs if getattr(c,field)==v) for v in set(getattr(c,field) for c in cs if getattr(c,field))}; return {'total':len(cs),'open':sum(c.status!='RESOLVED' for c in cs),'high_risk':sum(c.risk_level in ['HIGH','CRITICAL'] for c in cs),'critical':sum(c.risk_level=='CRITICAL' for c in cs),'pending_review':sum(c.status=='PENDING_REVIEW' for c in cs),'resolved':sum(c.status=='RESOLVED' for c in cs),'by_severity':counts('severity'),'by_status':counts('status'),'recent':[ComplaintOut.model_validate(c).model_dump(mode='json') for c in cs[:8]]}
+
+@router.get('/dashboard/analytics')
+def analytics(db:Session=Depends(get_db)):
+    from collections import defaultdict
+    def norm(v): return v.strip().title() if isinstance(v,str) else v
+    cs=db.scalars(select(Complaint).order_by(Complaint.created_at)).all()
+    by_date=defaultdict(int)
+    for c in cs: by_date[c.created_at.strftime('%Y-%m-%d')]+=1
+    complaints_over_time=[{'date':d,'count':v} for d,v in sorted(by_date.items())]
+    by_month=defaultdict(int)
+    for c in cs: by_month[c.created_at.strftime('%b %Y')]+=1
+    complaints_by_month=[{'month':m,'count':v} for m,v in sorted(by_month.items(),key=lambda x:x[0])]
+    by_sev=defaultdict(int)
+    for c in cs:
+        if c.severity: by_sev[norm(c.severity)]+=1
+    sev_order=['Critical','Major','Minor']
+    severity_breakdown=[{'severity':k,'count':v} for k,v in sorted(by_sev.items(),key=lambda x:sev_order.index(x[0]) if x[0] in sev_order else 99)]
+    by_risk=defaultdict(int)
+    for c in cs:
+        if c.risk_level: by_risk[norm(c.risk_level)]+=1
+    risk_order=['Critical','High','Medium','Low']
+    risk_breakdown=[{'risk':k,'count':v} for k,v in sorted(by_risk.items(),key=lambda x:risk_order.index(x[0]) if x[0] in risk_order else 99)]
+    by_status=defaultdict(int)
+    for c in cs:
+        if c.status: by_status[norm(c.status.replace('_',' '))]+=1
+    status_breakdown=[{'status':k,'count':v} for k,v in sorted(by_status.items(),key=lambda x:-x[1])]
+    by_customer=defaultdict(int)
+    for c in cs:
+        if c.customer_name: by_customer[norm(c.customer_name)]+=1
+    top_customers=[{'customer':k,'count':v} for k,v in sorted(by_customer.items(),key=lambda x:-x[1])[:10]]
+    by_product=defaultdict(int)
+    for c in cs:
+        if c.product_name: by_product[norm(c.product_name)]+=1
+    top_products=[{'product':k,'count':v} for k,v in sorted(by_product.items(),key=lambda x:-x[1])[:10]]
+    by_type=defaultdict(int)
+    for c in cs:
+        if c.complaint_type: by_type[norm(c.complaint_type)]+=1
+    complaint_types=[{'type':k,'count':v} for k,v in sorted(by_type.items(),key=lambda x:-x[1])[:10]]
+    sev_month=defaultdict(lambda:defaultdict(int))
+    for c in cs:
+        if c.severity: sev_month[c.created_at.strftime('%b %Y')][norm(c.severity)]+=1
+    severity_over_time=[{'month':m,**sevs} for m,sevs in sorted(sev_month.items(),key=lambda x:x[0])]
+    by_source=defaultdict(int)
+    for c in cs:
+        if c.source: by_source[norm(c.source)]+=1
+    source_breakdown=[{'source':k,'count':v} for k,v in sorted(by_source.items(),key=lambda x:-x[1])]
+    return {'complaints_over_time':complaints_over_time,'complaints_by_month':complaints_by_month,'severity_breakdown':severity_breakdown,'risk_breakdown':risk_breakdown,'status_breakdown':status_breakdown,'top_customers':top_customers,'top_products':top_products,'complaint_types':complaint_types,'severity_over_time':severity_over_time,'source_breakdown':source_breakdown}
