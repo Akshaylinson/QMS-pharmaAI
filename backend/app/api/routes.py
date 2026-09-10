@@ -91,6 +91,7 @@ def settings_info():
     }
 
 
+@router.get('/dashboard/statistics')
 def stats(db:Session=Depends(get_db)):
     cs=db.scalars(select(Complaint)).all(); counts=lambda field:{v:sum(1 for c in cs if getattr(c,field)==v) for v in set(getattr(c,field) for c in cs if getattr(c,field))}; return {'total':len(cs),'open':sum(c.status!='RESOLVED' for c in cs),'high_risk':sum(c.risk_level in ['HIGH','CRITICAL'] for c in cs),'critical':sum(c.risk_level=='CRITICAL' for c in cs),'pending_review':sum(c.status=='PENDING_REVIEW' for c in cs),'resolved':sum(c.status=='RESOLVED' for c in cs),'by_severity':counts('severity'),'by_status':counts('status'),'recent':[ComplaintOut.model_validate(c).model_dump(mode='json') for c in cs[:8]]}
 
