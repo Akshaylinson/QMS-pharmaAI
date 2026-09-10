@@ -5,6 +5,21 @@ import {api} from '../services/api';
 import {FlaskConical,Paperclip,Send,Check,CheckCircle2,ShieldCheck,FileText,UserRound,Sparkles,RotateCcw} from 'lucide-react';
 
 const WELCOME='Ready to process new complaints. Paste the customer email, describe the issue, or upload a complaint report. I\u2019ll extract the facts and run an initial risk assessment.';
+
+// All fields that must be filled before saving
+const REQUIRED_FIELDS=[
+  ['source','Complaint Source'],
+  ['customer_name','Customer Name'],
+  ['product_name','Product Name'],
+  ['product_strength','Product Strength / Grade'],
+  ['batch_number','Batch / Lot Number'],
+  ['affected_quantity','Affected Quantity'],
+  ['manufacturing_date','Manufacturing Date'],
+  ['expiry_date','Expiry Date'],
+  ['complaint_type','Complaint Category'],
+  ['description','Complaint Description'],
+];
+
 const groups=[
   ['1. Origin & Customer Details',[['source','Complaint Source'],['customer_name','Customer Name']]],
   ['2. Product & Batch Identification',[['product_name','Product Name'],['product_strength','Product Strength / Grade'],['batch_number','Batch / Lot Number'],['affected_quantity','Affected Quantity'],['manufacturing_date','Manufacturing Date'],['expiry_date','Expiry Date']]],
@@ -20,11 +35,14 @@ export default function LogComplaint(){
   const [messages,setMessages]=useState([welcomeMsg()]);
   const [notice,setNotice]=useState('');
   const [dialog,setDialog]=useState(null);
+  const [completenessDialog,setCompletenessDialog]=useState(null); // {missingFields, fillText}
+  const [fillText,setFillText]=useState('');
   const [dragging,setDragging]=useState(false);
   const fileInput=useRef();
   const textareaRef=useRef();
 
-  const ready=['customer_name','product_name','batch_number','description'].every(key=>form[key]);
+  const missingRequired=REQUIRED_FIELDS.filter(([key])=>!form[key]);
+  const allComplete=missingRequired.length===0;
 
   function autoResize(){
     const el=textareaRef.current;
@@ -69,7 +87,12 @@ export default function LogComplaint(){
   }
 
   async function commit(){
-    if(!ready)return;
+    // Gate: show completeness checker if any required field is missing
+    if(!allComplete){
+      setFillText('');
+      setCompletenessDialog(missingRequired);
+      return;
+    }
     try{
       const saved=await dispatch(saveComplaint(commitPayload())).unwrap();
       await Promise.all([dispatch(loadComplaints()),dispatch(loadDashboard())]);
@@ -77,6 +100,12 @@ export default function LogComplaint(){
     }catch(err){
       setDialog({type:'error',message:err instanceof Error&&err.message?err.message:'Unable to commit the complaint. Please review the entered complaint details and try again.'});
     }
+  }
+
+  async function handleFillMissing(){
+    if(!fillText.trim())return;
+    setCompletenessDialog(null);
+    await process(fillText.trim());
   }
 
   function handleReset(){dispatch(reset());setMessages([welcomeMsg()]);setNotice('');}
@@ -93,7 +122,7 @@ export default function LogComplaint(){
         <div className="ledger">
           <div className="ledger-title">
             <div><h1>Log Customer Complaint</h1><p>API &amp; FDF Quality Assurance Module</p></div>
-            <span className={ready?'commit-state ready':'commit-state'}><i/> {ready?'Ready to Commit':'Pending Triage'}</span>
+            <span className={allComplete?'commit-state ready':'commit-state'}><i/> {allComplete?'Ready to Commit':'Pending Triage'}</span>
           </div>
           {error&&<div className="alert">{error}</div>}
           {groups.map(([heading,fields])=>(
@@ -118,7 +147,7 @@ export default function LogComplaint(){
           </section>
           <div className="commit-buttons">
             <button className="reset-button" disabled={loading} onClick={handleReset}><RotateCcw size={19}/>Reset Form</button>
-            <button className="commit-button" disabled={!ready||loading} onClick={commit}><Check size={19}/>{loading?'Processing\u2026':'Save Complaint'}</button>
+            <button className="commit-button" disabled={loading} onClick={commit}><Check size={19}/>{loading?'Processing\u2026':'Save Complaint'}</button>
           </div>
         </div>
 
@@ -173,6 +202,43 @@ export default function LogComplaint(){
         </aside>
       </div>
 
+      {/* Completeness checker dialog */}
+      {completenessDialog&&(
+        <div className="commit-dialog-backdrop" onClick={()=>setCompletenessDialog(null)}>
+          <div className="commit-dialog completeness-dialog" role="dialog" aria-modal="true" aria-labelledby="completeness-title" onClick={e=>e.stopPropagation()}>
+            <div className="completeness-dialog-header">
+              <h2 id="completeness-title">Complaint Completeness Check</h2>
+              <p>Some required fields are missing. Provide the details below and the Copilot will fill them in automatically.</p>
+            </div>
+            <div className="completeness-dialog-body">
+              <p className="missing-fields-label">Missing fields</p>
+              <ul className="missing-fields-list">
+                {completenessDialog.map(([,title])=>(
+                  <li key={title}><span className="missing-dot"/>{title}</li>
+                ))}
+              </ul>
+              <p className="completeness-fill-label">Provide the missing details</p>
+              <p className="completeness-fill-hint">Type naturally, e.g. &ldquo;Complaint source is Email, expiry date is March 2028, affected quantity is 3 vials&rdquo;</p>
+              <textarea
+                className="completeness-textarea"
+                value={fillText}
+                onChange={e=>setFillText(e.target.value)}
+                placeholder="Enter the missing field values here…"
+                rows={4}
+                autoFocus
+              />
+              <div className="completeness-actions">
+                <button className="outline" onClick={()=>setCompletenessDialog(null)}>Cancel</button>
+                <button className="primary" disabled={!fillText.trim()||loading} onClick={handleFillMissing}>
+                  <Check size={15}/>Add to Copilot
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save / error dialog */}
       {dialog&&(
         <div className="commit-dialog-backdrop" onClick={dismissDialog}>
           <div className={`commit-dialog ${dialog.type}`} role="dialog" aria-modal="true" aria-labelledby="commit-dialog-title" onClick={e=>e.stopPropagation()}>
