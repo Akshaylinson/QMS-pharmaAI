@@ -1,0 +1,175 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+3 0 obj
+<< /Length 3416 >>
+stream
+BT
+/F2 13 Tf
+50 780 Td
+16 TL
+(AIVOA.AI ? Customer Complaint Report) Tj
+ET
+BT
+/F1 10 Tf
+50 750 Td
+14 TL
+() Tj T*
+(Date: 14 February 2026) Tj T*
+(To: Quality Assurance Department, AIVOA Pharma) Tj T*
+(From: Dr. Elena Vasquez, Chief Pharmacist) Tj T*
+(Organization: Central City Hospital Pharmacy) Tj T*
+(Contact: +1-312-555-0847  |  e.vasquez@centralcityhospital.org) Tj T*
+(Country: United States) Tj T*
+() Tj T*
+ET
+BT
+/F2 11 Tf
+50 638 Td
+14 TL
+(SUBJECT: Urgent Quality Complaint ? Foreign Particle in Injectable Product) Tj
+ET
+BT
+/F1 10 Tf
+50 638 Td
+14 TL
+() Tj T*
+(Product Name   : Morphine Sulfate Injection) Tj T*
+(Strength       : 10 mg/mL) Tj T*
+(Batch Number   : MOR-2026-089) Tj T*
+(Manufacturing  : 2025-09-10) Tj T*
+(Expiry Date    : 2027-09-09) Tj T*
+(Product Type   : FDF \(Sterile Injectable\)) Tj T*
+(Market         : United States) Tj T*
+() Tj T*
+ET
+BT
+/F2 11 Tf
+50 498 Td
+14 TL
+(COMPLAINT DETAILS) Tj
+ET
+BT
+/F1 10 Tf
+50 498 Td
+14 TL
+() Tj T*
+(Complaint Type : Foreign Particle / Contamination) Tj T*
+(Complaint Date : 2026-02-13) Tj T*
+(Received Date  : 2026-02-14) Tj T*
+(Affected Qty   : 6 vials) Tj T*
+(Sample Avail.  : Yes ? 4 vials quarantined and available for return) Tj T*
+() Tj T*
+ET
+BT
+/F2 11 Tf
+50 386 Td
+14 TL
+(DESCRIPTION) Tj
+ET
+BT
+/F1 10 Tf
+50 386 Td
+14 TL
+() Tj T*
+(During routine preparation of an IV analgesic dose for a post-operative patient,) Tj T*
+(our pharmacy technician observed a visible dark brown fibrous particle suspended) Tj T*
+(inside a sealed 10 mL vial of Morphine Sulfate Injection 10 mg/mL, batch) Tj T*
+(MOR-2026-089. The particle measured approximately 3 mm in length.) Tj T*
+() Tj T*
+(The vial was immediately removed from use and quarantined. Upon inspection of) Tj T*
+(the remaining vials from the same shipment, 3 additional vials showed similar) Tj T*
+(particulate matter. A total of 6 vials from this batch have been quarantined.) Tj T*
+() Tj T*
+(The affected batch was received on 2026-01-28 and stored under recommended) Tj T*
+(conditions \(15-25 degrees C, protected from light\). No other batches of this) Tj T*
+(product are currently in use at our facility.) Tj T*
+() Tj T*
+ET
+BT
+/F2 11 Tf
+50 176 Td
+14 TL
+(PATIENT IMPACT) Tj
+ET
+BT
+/F1 10 Tf
+50 176 Td
+14 TL
+() Tj T*
+(The contaminated vial was identified before administration. No patient was) Tj T*
+(harmed. However, given the critical nature of the product \(opioid injectable\),) Tj T*
+(we consider this a HIGH patient safety risk and are requesting an urgent) Tj T*
+(investigation and written response within 72 hours.) Tj T*
+() Tj T*
+ET
+BT
+/F2 11 Tf
+50 78 Td
+14 TL
+(INITIAL ASSESSMENT) Tj
+ET
+BT
+/F1 10 Tf
+50 78 Td
+14 TL
+() Tj T*
+(Severity       : CRITICAL) Tj T*
+(Priority       : IMMEDIATE) Tj T*
+(Patient Impact : HIGH) Tj T*
+(Quality Impact : CRITICAL) Tj T*
+(Regulatory     : HIGH ? FDA MedWatch report may be required) Tj T*
+(Safety Concern : YES) Tj T*
+() Tj T*
+ET
+BT
+/F2 11 Tf
+50 -48 Td
+14 TL
+(REQUESTED ACTIONS) Tj
+ET
+BT
+/F1 10 Tf
+50 -48 Td
+14 TL
+() Tj T*
+(1. Immediate batch recall assessment for MOR-2026-089.) Tj T*
+(2. Root cause investigation with findings shared within 30 days.) Tj T*
+(3. Corrective and Preventive Action \(CAPA\) plan.) Tj T*
+(4. Replacement stock from a different batch.) Tj T*
+() Tj T*
+(Retained samples are available for collection at your earliest convenience.) Tj T*
+() Tj T*
+(Regards,) Tj T*
+(Dr. Elena Vasquez) Tj T*
+(Central City Hospital Pharmacy) Tj T*
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 5 0 R /MediaBox [0 0 595 842] /Contents 3 0 R /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> >>
+endobj
+5 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+6 0 obj
+<< /Type /Catalog /Pages 5 0 R >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000106 00000 n 
+0000000208 00000 n 
+0000003676 00000 n 
+0000003812 00000 n 
+0000003869 00000 n 
+trailer
+<< /Size 7 /Root 6 0 R >>
+startxref
+3918
+%%EOF
