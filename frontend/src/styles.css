@@ -38,3 +38,8 @@ html,body,#root{height:100%;overflow:hidden}.main-content{overflow-x:hidden}.mai
 .st-guidelines li{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#445368;line-height:1.55}
 .st-check{color:#127753;flex-shrink:0;margin-top:2px}
 @media(max-width:900px){.st-grid{grid-template-columns:1fr}.st-grid>:last-child{grid-column:1}}
+.an-tab-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:16px;flex-wrap:wrap}
+.an-tabs{display:flex;gap:4px}
+.an-tab{border:1px solid #e3e9f0;background:#f8fafc;color:#758399;font:500 12px Inter,sans-serif;padding:6px 14px;border-radius:6px;cursor:pointer}
+.an-tab:hover{background:#edf4ff;color:#1264d6;border-color:#c5d9f5}
+.an-tab-active{background:#edf4ff;color:#1264d6;border-color:#1264d6;font-weight:600}

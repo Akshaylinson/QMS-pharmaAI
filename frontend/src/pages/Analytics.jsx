@@ -62,6 +62,7 @@ export default function Analytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [activeTab, setActiveTab] = useState('type');
 
   useEffect(() => {
     dispatch(loadDashboard());
@@ -74,8 +75,13 @@ export default function Analytics() {
   if (error || !data) return <section className="page an-page"><p style={{ color: '#b4232f', marginTop: 8 }}>Could not load analytics data. Ensure the backend is running.</p></section>;
 
   const sevKeys = [...new Set(data.severity_over_time.flatMap(d => Object.keys(d).filter(k => k !== 'month')))];
-  // statuses come from backend — dynamic, never hard-coded
   const statusKeys = data.all_statuses || [];
+  const tabData = {
+    type:     { data: data.complaint_types, key: 'type',     title: 'Top 10 complaint types' },
+    customer: { data: data.top_customers,   key: 'customer', title: 'Top 10 customers by complaint volume' },
+    product:  { data: data.top_products,    key: 'product',  title: 'Top 10 products by complaint volume' },
+  };
+  const tab = tabData[activeTab];
 
   return (
     <section className="page an-page">
@@ -142,45 +148,26 @@ export default function Analytics() {
         </ChartCard>
       </div>
 
-      {/* 3 — Complaint types top 10 */}
-      <ChartCard title="Top 10 complaint types" full>
-        <ResponsiveContainer width="100%" height={Math.max(180, data.complaint_types.length * 36)}>
-          <BarChart data={data.complaint_types} layout="vertical" margin={{ top: 4, right: 32, left: 4, bottom: 0 }}>
+      {/* 3 — Tabbed: complaint types / top customers / top products */}
+      <section className="card an-card an-full">
+        <div className="an-tab-head">
+          <h2 className="an-title" style={{margin:0}}>{tab.title}</h2>
+          <div className="an-tabs">
+            {[['type','By Type'],['customer','By Customer'],['product','By Product']].map(([k,l])=>(
+              <button key={k} className={`an-tab${activeTab===k?' an-tab-active':''}`} onClick={()=>setActiveTab(k)}>{l}</button>
+            ))}
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={Math.max(180, tab.data.length * 36)}>
+          <BarChart data={tab.data} layout="vertical" margin={{ top: 4, right: 32, left: 4, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
             <XAxis type="number" allowDecimals={false} tick={TICK} />
-            <YAxis type="category" dataKey="type" tick={{ fontSize: 11, fill: '#445368' }} width={200} />
+            <YAxis type="category" dataKey={tab.key} tick={{ fontSize: 11, fill: '#445368' }} width={200} />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="count" fill={TEAL} name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={22} />
+            <Bar dataKey="count" fill={BLUE} name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={22} />
           </BarChart>
         </ResponsiveContainer>
-      </ChartCard>
-
-      {/* 4 — Top customers + top products */}
-      <div className="an-grid">
-        <ChartCard title="Top 10 customers by complaint volume">
-          <ResponsiveContainer width="100%" height={Math.max(180, data.top_customers.length * 32)}>
-            <BarChart data={data.top_customers} layout="vertical" margin={{ top: 4, right: 32, left: 4, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
-              <XAxis type="number" allowDecimals={false} tick={TICK} />
-              <YAxis type="category" dataKey="customer" tick={{ fontSize: 10, fill: '#445368' }} width={160} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" fill="#1264d6" name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={20} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Top 10 products by complaint volume">
-          <ResponsiveContainer width="100%" height={Math.max(180, data.top_products.length * 32)}>
-            <BarChart data={data.top_products} layout="vertical" margin={{ top: 4, right: 32, left: 4, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
-              <XAxis type="number" allowDecimals={false} tick={TICK} />
-              <YAxis type="category" dataKey="product" tick={{ fontSize: 10, fill: '#445368' }} width={160} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" fill="#3b82f6" name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={20} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
+      </section>
     </section>
   );
 }
