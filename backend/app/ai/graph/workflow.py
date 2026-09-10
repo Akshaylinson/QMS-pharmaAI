@@ -10,58 +10,50 @@ class ComplaintState(TypedDict, total=False):
 def _stage(s, name): return {'stages': s.get('stages', []) + [name]}
 def classify(s): return _stage(s, 'Input classified')
 def extract(s):
-    """Extract only facts stated in the latest chat turn, then merge them with the draft."""
+    """LLM is the primary extractor. Regex is a zero-dependency fallback only."""
     t=s['raw_input']; low=t.lower()
-    def get(pattern):
-        match=re.search(pattern,t,re.I)
-        return match.group(1).strip(' .,;:') if match else None
     def iso_date(value):
         if not value: return None
-        # Strip ordinal suffixes: 1st → 1, 2nd → 2, etc.
-        cleaned=re.sub(r'(\d+)(?:st|nd|rd|th)\b',r'\1',value.strip())
-        for pattern in ('%B %d, %Y','%b %d, %Y','%B %d %Y','%b %d %Y','%B %Y','%b %Y','%d/%m/%Y','%d-%m-%Y','%m/%d/%Y','%m-%d-%Y'):
-            try: return datetime.strptime(cleaned,pattern).date().isoformat()
+        cleaned=re.sub(r'(\d+)(?:st|nd|rd|th)\b',r'\1',str(value).strip())
+        for fmt in ('%Y-%m-%d','%B %d, %Y','%b %d, %Y','%B %d %Y','%b %d %Y','%B %Y','%b %Y','%d/%m/%Y','%d-%m-%Y','%m/%d/%Y','%m-%d-%Y'):
+            try: return datetime.strptime(cleaned,fmt).date().isoformat()
             except ValueError: pass
         return value
-    x={
-        'source':get(r'(?:received\s+(?:via|by|through)|source\s*(?:is|:)?)\s*(email|phone|portal|fax|pharmacy|distributor|hospital|web\s+portal)') or ('Email' if 'email' in low else None),
-        'product_name':get(r'(?:of|for)\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*(?:\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhaler))?)(?=\s+\d|\s+batch|\s+lot|[,.]|$)') or get(r'([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*(?:\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhaler)))'),
-        'product_strength':get(r'(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|mL|%|IU))'),
-        'batch_number':get(r'(?:batch|lot)(?:\s+(?:number|no\.?))?\s*(?:is|:|#)?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})'),
-        'affected_quantity':get(r'(\d+\s+(?:discolou?red\s+|damaged\s+|broken\s+)?(?:capsules?|tablets?|packs?|units?|vials?|bottles?|drums?))') or get(r'(\d+\s+(?:capsules?|tablets?|packs?|units?|vials?|bottles?))'),
-        'manufacturing_date':iso_date(get(r'manufactur(?:ing|ed)\s+(?:date\s+(?:as|is|:)?\s*|in\s+)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
-        'expiry_date':iso_date(get(r'expir(?:y|ing|ation|ed)\s+(?:date\s+(?:as|is|:)?\s*|in\s+)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
-        'originating_site':get(r'(?:originated?\s+from|originating\s+site|site\s+block)\s+([A-Za-z0-9][\w .-]+?)(?=[,.]|$|\s+and)'),
-        'impacted_materials':get(r'((?:primary|secondary)\s+packaging\s+material[^.,]*)'),
-    }
-    # A first complaint message is the formal record; correction messages should not overwrite it.
-    if not s.get('current_complaint', {}).get('description') or any(w in low for w in ['reported', 'complaint', 'defect', 'contamination', 'discolor', 'broken', 'damaged']):
-        x['description']=t
-    if any(w in low for w in ['discolor', 'colour', 'color']): x['complaint_type']='Product Defect - Discoloration'
-    elif any(w in low for w in ['blister','packaging','seal']): x['complaint_type']='Packaging Defect'
-    elif any(w in low for w in ['foreign matter','foreign particle','contamination','particulate']): x['complaint_type']='Product Defect - Foreign Matter'
-    elif any(w in low for w in ['broken','damaged','defect']): x['complaint_type']='Product Defect'
-    if any(w in low for w in ['email','phone','portal','fax']): x['source']=x.get('source') or next((w.title() for w in ['email','phone','portal','fax'] if w in low),None)
-    x={k:v for k,v in x.items() if v not in (None,'')}
-    # When configured, the remote provider produces the extraction; local parsing is a transparent no-credential fallback for demo intake.
-    # Semantic fields (customer_name, originating_site) are LLM-only — regex is too error-prone for them.
-    SEMANTIC_FIELDS={'customer_name','originating_site','impacted_materials','complaint_type','description'}
+    # --- Primary path: LLM extraction ---
     try:
         from app.ai.providers.factory import get_llm_provider
         from app.schemas.ai import ExtractionOutput
         from app.ai.prompts.extraction import EXTRACTION
         provider=get_llm_provider()
         if provider:
-            model=provider.structured(f'{EXTRACTION}\nComplaint:\n{t}', ExtractionOutput)
-            provider_facts={k:v for k,v in model.model_dump().items() if v is not None}
+            model=provider.structured(f'{EXTRACTION}\n\nText to extract from:\n{t}', ExtractionOutput)
+            x={k:v for k,v in model.model_dump().items() if v is not None}
             for field in ('manufacturing_date','expiry_date','complaint_date','received_date'):
-                if provider_facts.get(field): provider_facts[field]=iso_date(provider_facts[field])
-            # LLM wins on all fields; for semantic fields remove any regex guess first
-            for f in SEMANTIC_FIELDS: x.pop(f,None)
-            x={**x, **provider_facts}
+                if x.get(field): x[field]=iso_date(x[field])
+            return {'extracted_complaint':x,'extraction_confidence':{k:.92 for k in x}, **_stage(s,'Complaint extracted')}
     except Exception as exc:
-        return {'extracted_complaint':x,'extraction_confidence':{k:(.78 if v else 0) for k,v in x.items()},'errors':[f'LLM extraction unavailable; used local intake parser: {type(exc).__name__}'], **_stage(s,'Complaint extracted')}
-    return {'extracted_complaint':x,'extraction_confidence':{k:(.9 if v else 0) for k,v in x.items()}, **_stage(s,'Complaint extracted')}
+        pass  # fall through to regex fallback
+    # --- Fallback path: regex (no LLM credentials) ---
+    def get(pattern):
+        m=re.search(pattern,t,re.I)
+        return m.group(1).strip(' .,;:') if m else None
+    x={
+        'source': get(r'(?:source\s*[:\-]\s*)(email|phone|portal|fax)') or ('Email' if 'email' in low else None),
+        'customer_name': get(r'(?:^|\n)From:\s*([^\n<]+?)(?:\s*[<,\n]|$)') or get(r'(?:yours\s+(?:faithfully|sincerely|truly)|regards|sincerely)[,\s]+([A-Z][\w .&-]+?)(?:\n|$)') or get(r'(?:customer|reported by|submitted by)\s*[:\-]\s*([A-Z][\w .&-]+?)(?:[,\n]|$)'),
+        'product_name': get(r'Product\s+Name\s*[:\-]\s*([^\n]+?)(?:\n|$)') or get(r'([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*(?:\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhaler)))'),
+        'product_strength': get(r'Strength\s*[:\-]\s*([\d.]+\s*(?:mg|mcg|g|ml|mL|%|IU)[^\n]*)') or get(r'([\d.]+\s*(?:mg|mcg|g|ml|mL|%|IU))'),
+        'batch_number': get(r'Batch\s+(?:Number|No\.?)\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9-]{3,})') or get(r'(?:batch|lot)\s*[:\-#]?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})'),
+        'affected_quantity': get(r'Affected\s+Qty\s*[:\-]\s*([^\n]+?)(?:\n|$)') or get(r'(\d+\s+(?:capsules?|tablets?|packs?|units?|vials?|bottles?))'),
+        'manufacturing_date': iso_date(get(r'Manufacturing\s*[:\-]\s*([\d]{4}-[\d]{2}-[\d]{2}|[A-Za-z]+\s+\d{4}|[\d]{1,2}[/\-][\d]{1,2}[/\-][\d]{2,4})') or get(r'manufactur(?:ing|ed)\s+(?:date\s+(?:as|is|:)?\s*)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|[\d]{4}-[\d]{2}-[\d]{2})')),
+        'expiry_date': iso_date(get(r'Expiry\s+Date\s*[:\-]\s*([\d]{4}-[\d]{2}-[\d]{2}|[A-Za-z]+\s+\d{4}|[\d]{1,2}[/\-][\d]{1,2}[/\-][\d]{2,4})') or get(r'expir(?:y|ing|ation|ed)\s+(?:date\s+(?:as|is|:)?\s*)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|[\d]{4}-[\d]{2}-[\d]{2})')),
+        'originating_site': get(r'(?:originating\s+site|site\s+block)\s*[:\-]\s*([A-Za-z0-9][\w .-]+?)(?=[,\n.]|$)'),
+        'impacted_materials': get(r'((?:primary|secondary)\s+packaging\s+material[^.,]*)'),
+    }
+    if not s.get('current_complaint',{}).get('description') or any(w in low for w in ['reported','complaint','defect','contamination','discolor','broken','damaged','foreign']):
+        x['description']=t
+    if any(w in low for w in ['email','phone','portal','fax']): x['source']=x.get('source') or next((w.title() for w in ['email','phone','portal','fax'] if w in low),None)
+    x={k:v for k,v in x.items() if v not in (None,'')}
+    return {'extracted_complaint':x,'extraction_confidence':{k:.72 for k in x},'errors':['LLM unavailable; used local regex fallback.'], **_stage(s,'Complaint extracted')}
 def normalize(s):
     base={k:v for k,v in s.get('current_complaint',{}).items() if v not in (None,'')}
     updates={k:v for k,v in s['extracted_complaint'].items() if v not in (None,'')}
