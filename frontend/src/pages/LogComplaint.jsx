@@ -2,7 +2,7 @@ import {useRef,useState} from 'react';
 import {useDispatch,useSelector} from 'react-redux';
 import {runIntake,saveComplaint,reset,loadComplaints,loadDashboard} from '../store';
 import {api} from '../services/api';
-import {FlaskConical,Paperclip,Send,Check,CheckCircle2,ShieldCheck,FileText,UserRound,Sparkles,RotateCcw,Lightbulb,ListChecks,FileCheck2} from 'lucide-react';
+import {FlaskConical,Paperclip,Send,Check,CheckCircle2,XCircle,ShieldCheck,FileText,UserRound,Sparkles,RotateCcw,Lightbulb,ListChecks,FileCheck2} from 'lucide-react';
 
 const WELCOME='Ready to process new complaints. Paste the customer email, describe the issue, or upload a complaint report. I\u2019ll extract the facts and run an initial risk assessment.';
 
@@ -322,10 +322,10 @@ export default function LogComplaint(){
       {dialog&&(
         <div className="commit-dialog-backdrop" onClick={dismissDialog}>
           <div className={`commit-dialog ${dialog.type}`} role="dialog" aria-modal="true" aria-labelledby="commit-dialog-title" onClick={e=>e.stopPropagation()}>
-            <CheckCircle2 size={30}/>
+            {dialog.type==='duplicate'?<XCircle size={30}/>:<CheckCircle2 size={30}/>}
             <h2 id="commit-dialog-title">{dialog.type==='success'?'Complaint committed':dialog.type==='duplicate'?'Possible duplicate complaint':'Unable to commit complaint'}</h2>
             {dialog.type==='duplicate'
-              ? <><p>This complaint was not saved because a similar complaint is already registered. Review the following record(s) with QA before creating another complaint.</p><div className="duplicate-candidates">{dialog.matches.map(match=><div className="duplicate-candidate" key={match.complaint_id}><b>{match.complaint_number}</b><span>{Math.round(match.similarity_score*100)}% match</span><small>{match.reason}</small></div>)}</div></>
+              ? <p>This complaint was not saved because a similar complaint is already registered. Review the following records with QA before creating another complaint.</p>
               : <p>{dialog.message}</p>}
             <button className="primary" onClick={dismissDialog}>OK</button>
           </div>
