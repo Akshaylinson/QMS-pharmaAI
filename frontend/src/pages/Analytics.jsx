@@ -8,11 +8,11 @@ import {
 } from 'recharts';
 
 const BLUE  = '#1264d6';
-const TEAL  = '#16a4a0';
+const TEAL  = '#1264d6';
 const GRID  = '#e5eaf1';
 const TICK  = { fontSize: 11, fill: '#758399' };
 
-const SEV_COLOR    = { Critical: '#b4232f', Major: '#be540e', Minor: '#127753' };
+const SEV_COLOR    = { Critical: '#0a3d8f', Major: '#1264d6', Minor: '#6aa3f0' };
 const STATUS_COLOR = {
   'Pending Review':     '#a06b00',
   'Under Investigation': BLUE,
@@ -20,8 +20,7 @@ const STATUS_COLOR = {
   'Closed':             '#607084',
   'Escalated':          '#b4232f',
 };
-// fallback palette for any unexpected status values
-const PALETTE = [BLUE, TEAL, '#be540e', '#127753', '#b4232f', '#607084', '#4d45dc', '#0891b2'];
+const PALETTE = ['#0a3d8f', '#1264d6', '#2473d8', '#3b82f6', '#6aa3f0', '#93bff5', '#bdd6fa', '#dceeff'];
 
 function StatCard({ label, value }) {
   return (
@@ -165,7 +164,7 @@ export default function Analytics() {
               <XAxis type="number" allowDecimals={false} tick={TICK} />
               <YAxis type="category" dataKey="customer" tick={{ fontSize: 10, fill: '#445368' }} width={160} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" fill={BLUE} name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={20} />
+              <Bar dataKey="count" fill="#1264d6" name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={20} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -177,7 +176,7 @@ export default function Analytics() {
               <XAxis type="number" allowDecimals={false} tick={TICK} />
               <YAxis type="category" dataKey="product" tick={{ fontSize: 10, fill: '#445368' }} width={160} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="count" fill={TEAL} name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={20} />
+              <Bar dataKey="count" fill="#3b82f6" name="Complaints" radius={[0, 4, 4, 0]} maxBarSize={20} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
