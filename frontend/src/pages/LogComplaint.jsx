@@ -35,6 +35,7 @@ export default function LogComplaint(){
   const [messages,setMessages]=useState([welcomeMsg()]);
   const [notice,setNotice]=useState('');
   const [dialog,setDialog]=useState(null);
+  const [checkingDuplicate,setCheckingDuplicate]=useState(false);
   const [completenessDialog,setCompletenessDialog]=useState(null);
   const [fillText,setFillText]=useState('');
   const [directValues,setDirectValues]=useState({});
@@ -90,11 +91,20 @@ export default function LogComplaint(){
       return;
     }
     try{
-      const saved=await dispatch(saveComplaint(commitPayload())).unwrap();
+      const payload=commitPayload();
+      setCheckingDuplicate(true);
+      const duplicateCheck=await api.duplicateCheck(payload);
+      if(duplicateCheck.is_duplicate){
+        setDialog({type:'duplicate',matches:duplicateCheck.matches});
+        return;
+      }
+      const saved=await dispatch(saveComplaint(payload)).unwrap();
       await Promise.all([dispatch(loadComplaints()),dispatch(loadDashboard())]);
       setDialog({type:'success',message:`Complaint ${saved.complaint_number} has been committed to the QMS ledger.`});
     }catch(err){
       setDialog({type:'error',message:err instanceof Error&&err.message?err.message:'Unable to commit the complaint. Please review the entered complaint details and try again.'});
+    }finally{
+      setCheckingDuplicate(false);
     }
   }
 
@@ -202,8 +212,8 @@ export default function LogComplaint(){
           )}
 
           <div className="commit-buttons">
-            <button className="reset-button" disabled={loading} onClick={handleReset}><RotateCcw size={19}/>Reset Form</button>
-            <button className="commit-button" disabled={loading} onClick={commit}><Check size={19}/>{loading?'Processing\u2026':'Save Complaint'}</button>
+            <button className="reset-button" disabled={loading||checkingDuplicate} onClick={handleReset}><RotateCcw size={19}/>Reset Form</button>
+            <button className="commit-button" disabled={loading||checkingDuplicate} onClick={commit}><Check size={19}/>{checkingDuplicate?'Checking duplicates\u2026':loading?'Processing\u2026':'Save Complaint'}</button>
           </div>
         </div>
 
@@ -313,8 +323,10 @@ export default function LogComplaint(){
         <div className="commit-dialog-backdrop" onClick={dismissDialog}>
           <div className={`commit-dialog ${dialog.type}`} role="dialog" aria-modal="true" aria-labelledby="commit-dialog-title" onClick={e=>e.stopPropagation()}>
             <CheckCircle2 size={30}/>
-            <h2 id="commit-dialog-title">{dialog.type==='success'?'Complaint committed':'Unable to commit complaint'}</h2>
-            <p>{dialog.message}</p>
+            <h2 id="commit-dialog-title">{dialog.type==='success'?'Complaint committed':dialog.type==='duplicate'?'Possible duplicate complaint':'Unable to commit complaint'}</h2>
+            {dialog.type==='duplicate'
+              ? <><p>This complaint was not saved because a similar complaint is already registered. Review the following record(s) with QA before creating another complaint.</p><div className="duplicate-candidates">{dialog.matches.map(match=><div className="duplicate-candidate" key={match.complaint_id}><b>{match.complaint_number}</b><span>{Math.round(match.similarity_score*100)}% match</span><small>{match.reason}</small></div>)}</div></>
+              : <p>{dialog.message}</p>}
             <button className="primary" onClick={dismissDialog}>OK</button>
           </div>
         </div>

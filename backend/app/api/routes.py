@@ -1,4 +1,6 @@
 from datetime import datetime
+import re
+from difflib import SequenceMatcher
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -10,20 +12,57 @@ from app.documents.extractor import extract_document
 router=APIRouter()
 def number(): return f"CC-{datetime.utcnow():%Y%m%d}-{datetime.utcnow().microsecond:06d}"
 def record(db,cid,kind,payload): db.add(AnalysisRecord(complaint_id=cid,analysis_type=kind,payload=payload,provider='langgraph'))
-def duplicate_matches(db, complaint):
-    """Deterministic persisted-data comparison; deliberately returns candidates for QA review, never a decision."""
-    if not complaint.batch_number and not complaint.product_name: return []
-    candidates=db.scalars(select(Complaint).where(Complaint.id != complaint.id)).all(); out=[]
-    for other in candidates:
-        score=0
-        if complaint.batch_number and complaint.batch_number==other.batch_number: score+=.55
-        if complaint.product_name and complaint.product_name==other.product_name: score+=.3
-        if complaint.customer_name and complaint.customer_name==other.customer_name: score+=.15
-        if score>=.55: out.append({'complaint_id':other.id,'complaint_number':other.complaint_number,'similarity_score':round(score,2),'reason':'Matching batch/product/customer fields; requires QA review.'})
+def comparison_value(value):
+    """Comparison-only normalization; the entered complaint value is never changed."""
+    return re.sub(r'[^a-z0-9]+', ' ', str(value or '').casefold()).strip()
+
+def similarity(left, right):
+    left, right=comparison_value(left), comparison_value(right)
+    if not left or not right: return 0.0
+    if left==right: return 1.0
+    left_tokens, right_tokens=set(left.split()),set(right.split())
+    token_overlap=len(left_tokens & right_tokens)/len(left_tokens | right_tokens)
+    return max(token_overlap, SequenceMatcher(None,left,right).ratio())
+
+def field_value(complaint, field):
+    return complaint.get(field) if isinstance(complaint,dict) else getattr(complaint,field,None)
+
+def duplicate_matches(db, complaint, exclude_id=None):
+    """Return likely duplicate candidates for QA review; never silently merge records.
+
+    Score: batch 35%, product 20%, complaint type 15%, customer 10%,
+    description 15%, and affected quantity 5%. A candidate also needs a
+    meaningful anchor (same batch, or closely matching product plus issue).
+    """
+    if not field_value(complaint,'batch_number') and not field_value(complaint,'product_name'): return []
+    stmt=select(Complaint)
+    if exclude_id: stmt=stmt.where(Complaint.id != exclude_id)
+    out=[]
+    for other in db.scalars(stmt).all():
+        batch_match=similarity(field_value(complaint,'batch_number'),other.batch_number)
+        product_match=similarity(field_value(complaint,'product_name'),other.product_name)
+        type_match=similarity(field_value(complaint,'complaint_type'),other.complaint_type)
+        customer_match=similarity(field_value(complaint,'customer_name'),other.customer_name)
+        description_match=similarity(field_value(complaint,'description'),other.description)
+        quantity_match=similarity(field_value(complaint,'affected_quantity'),other.affected_quantity)
+        score=(batch_match*.35+product_match*.20+type_match*.15+customer_match*.10+description_match*.15+quantity_match*.05)
+        anchored=batch_match==1 or (product_match>=.85 and (type_match>=.85 or description_match>=.72))
+        if not anchored or score<.55: continue
+        reasons=[]
+        if batch_match==1: reasons.append('matching batch / lot')
+        if product_match>=.85: reasons.append('similar product')
+        if type_match>=.85: reasons.append('similar complaint category')
+        if customer_match>=.85: reasons.append('same customer')
+        if description_match>=.72: reasons.append('similar complaint description')
+        out.append({'complaint_id':other.id,'complaint_number':other.complaint_number,'similarity_score':round(score,2),'reason':', '.join(reasons)+'; requires QA review.'})
     return sorted(out,key=lambda x:x['similarity_score'],reverse=True)
 @router.post('/complaints',response_model=ComplaintOut,status_code=201)
 def create(body: ComplaintCreate, db:Session=Depends(get_db)):
     c=Complaint(complaint_number=number(),**body.model_dump()); db.add(c); db.flush(); db.add(AuditLog(complaint_id=c.id,action='Complaint created',details={})); db.commit(); db.refresh(c); return c
+@router.post('/complaints/duplicate-check')
+def preflight_duplicate_check(body: ComplaintCreate, db:Session=Depends(get_db)):
+    matches=duplicate_matches(db,body.model_dump())
+    return {'is_duplicate':bool(matches),'matches':matches,'criteria':'batch, product, complaint category, customer, description, and affected quantity'}
 @router.get('/complaints',response_model=list[ComplaintOut])
 def list_complaints(status:str|None=None, q:str|None=None, db:Session=Depends(get_db)):
     stmt=select(Complaint).order_by(Complaint.created_at.desc())
@@ -59,13 +98,13 @@ async def document_extract(file:UploadFile=File(...)):
 def analyze(complaint_id:str,db:Session=Depends(get_db)):
     c=db.get(Complaint,complaint_id)
     if not c: raise HTTPException(404,'Complaint not found')
-    result=complaint_graph.invoke({'raw_input':c.description or '', 'source_type':c.source or 'manual','stages':[]})['final_response']; result['duplicates']=duplicate_matches(db,c); r=result['risk']; c.severity=r['severity'];c.priority=r['priority'];c.risk_level=r['risk_level']; record(db,c.id,'full_analysis',result);db.add(AuditLog(complaint_id=c.id,action='AI analysis completed',details={'risk':r['risk_level']}));db.commit();return result
+    result=complaint_graph.invoke({'raw_input':c.description or '', 'source_type':c.source or 'manual','stages':[]})['final_response']; result['duplicates']=duplicate_matches(db,c,c.id); r=result['risk']; c.severity=r['severity'];c.priority=r['priority'];c.risk_level=r['risk_level']; record(db,c.id,'full_analysis',result);db.add(AuditLog(complaint_id=c.id,action='AI analysis completed',details={'risk':r['risk_level']}));db.commit();return result
 @router.post('/complaints/{complaint_id}/{operation}')
 def operation(complaint_id:str,operation:str,db:Session=Depends(get_db)):
     if operation not in {'risk-assessment','duplicate-check','root-cause','capa','summary'}: raise HTTPException(404,'Operation not found')
     c=db.get(Complaint,complaint_id)
     if not c: raise HTTPException(404,'Complaint not found')
-    result=complaint_graph.invoke({'raw_input':c.description or '', 'source_type':c.source or 'manual','stages':[]})['final_response']; result['duplicates']=duplicate_matches(db,c); key={'risk-assessment':'risk','duplicate-check':'duplicates','root-cause':'root_causes','capa':'capa','summary':'summary'}[operation]; record(db,c.id,operation,{key:result[key]});db.commit();return {key:result[key]}
+    result=complaint_graph.invoke({'raw_input':c.description or '', 'source_type':c.source or 'manual','stages':[]})['final_response']; result['duplicates']=duplicate_matches(db,c,c.id); key={'risk-assessment':'risk','duplicate-check':'duplicates','root-cause':'root_causes','capa':'capa','summary':'summary'}[operation]; record(db,c.id,operation,{key:result[key]});db.commit();return {key:result[key]}
 @router.post('/ai/copilot')
 def copilot(body:CopilotRequest):
     c=body.complaint; q=body.question.lower(); missing=[x for x in ['customer_name','product_name','batch_number','description'] if not c.get(x)]
