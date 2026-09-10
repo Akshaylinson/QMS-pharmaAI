@@ -58,7 +58,12 @@ def duplicate_matches(db, complaint, exclude_id=None):
     return sorted(out,key=lambda x:x['similarity_score'],reverse=True)
 @router.post('/complaints',response_model=ComplaintOut,status_code=201)
 def create(body: ComplaintCreate, db:Session=Depends(get_db)):
-    c=Complaint(complaint_number=number(),**body.model_dump()); db.add(c); db.flush(); db.add(AuditLog(complaint_id=c.id,action='Complaint created',details={})); db.commit(); db.refresh(c); return c
+    values=body.model_dump()
+    # The Log Complaint form does not collect a received date. Record its
+    # intake date, but preserve a date supplied by the customer or extractor.
+    if not values.get('received_date'):
+        values['received_date']=datetime.utcnow().date().isoformat()
+    c=Complaint(complaint_number=number(),**values); db.add(c); db.flush(); db.add(AuditLog(complaint_id=c.id,action='Complaint created',details={})); db.commit(); db.refresh(c); return c
 @router.post('/complaints/duplicate-check')
 def preflight_duplicate_check(body: ComplaintCreate, db:Session=Depends(get_db)):
     matches=duplicate_matches(db,body.model_dump())
