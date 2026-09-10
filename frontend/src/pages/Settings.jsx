@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { FlaskConical, Database, Bot, ShieldCheck, Info, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FlaskConical, Database, Bot, ShieldCheck, Info, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 
 function Section({ icon: Icon, title, children }) {
   return (
@@ -45,12 +45,35 @@ const QMS_GUIDELINES = [
 export default function Settings() {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     api.settingsInfo().then(d => { setInfo(d); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   const activeProvider = info?.llm_provider?.toLowerCase();
+
+  async function deleteAllData() {
+    const confirmed = window.confirm(
+      'Delete all complaint records, customer details, AI analysis records, and audit logs? This permanently removes seeded data too and cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setDeleteMessage('');
+    setDeleteError('');
+    try {
+      const result = await api.deleteAllData();
+      const deleted = result?.deleted || {};
+      setDeleteMessage(`All data has been deleted: ${deleted.complaints || 0} complaint${deleted.complaints === 1 ? '' : 's'}, ${deleted.analysis_records || 0} analysis record${deleted.analysis_records === 1 ? '' : 's'}, and ${deleted.audit_logs || 0} audit log${deleted.audit_logs === 1 ? '' : 's'}.`);
+    } catch (error) {
+      setDeleteError(error.message || 'Unable to delete data. Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <section className="page st-page">
@@ -125,6 +148,21 @@ export default function Settings() {
               </li>
             ))}
           </ul>
+        </Section>
+
+        <Section icon={Trash2} title="Delete Data">
+          <div className="st-danger-zone">
+            <div>
+              <h3>Start with a fresh dashboard</h3>
+              <p>Permanently delete all complaint records, customer details, AI analysis records, and audit logs. This also removes all seeded data. System settings and database structure are kept.</p>
+            </div>
+            <button className="st-delete-button" type="button" onClick={deleteAllData} disabled={deleting}>
+              <Trash2 size={16} />
+              {deleting ? 'Deleting data…' : 'Delete all data'}
+            </button>
+          </div>
+          {deleteMessage && <p className="st-delete-message st-delete-success" role="status">{deleteMessage}</p>}
+          {deleteError && <p className="st-delete-message st-delete-error" role="alert">{deleteError}</p>}
         </Section>
 
       </div>

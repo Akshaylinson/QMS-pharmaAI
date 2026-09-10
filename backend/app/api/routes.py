@@ -2,7 +2,7 @@ from datetime import datetime
 import re
 from difflib import SequenceMatcher
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import select, func
+from sqlalchemy import delete, select, func
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.complaint import Complaint, AnalysisRecord, AuditLog
@@ -133,6 +133,15 @@ def settings_info():
         'version': '1.0.0',
         'app_name': 'AIVOA.AI — Pharmaceutical QMS',
     }
+
+@router.delete('/settings/data')
+def delete_all_complaint_data(db:Session=Depends(get_db)):
+    """Permanently clear complaint data while retaining application schema/configuration."""
+    analysis_count=db.execute(delete(AnalysisRecord)).rowcount or 0
+    audit_count=db.execute(delete(AuditLog)).rowcount or 0
+    complaint_count=db.execute(delete(Complaint)).rowcount or 0
+    db.commit()
+    return {'deleted':{'complaints':complaint_count,'analysis_records':analysis_count,'audit_logs':audit_count}}
 
 
 @router.get('/dashboard/statistics')
