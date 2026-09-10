@@ -152,7 +152,7 @@ export default function LogComplaint(){
               <button className="attach" aria-label="Attach complaint file" onClick={()=>fileInput.current?.click()}>
                 <Paperclip size={14}/>Attach file
               </button>
-              <span className="attach-hint">PDF \u00b7 DOCX \u00b7 TXT \u00b7 EML</span>
+              <span className="attach-hint">PDF &middot; DOCX &middot; TXT &middot; Email</span>
             </div>
             <div className="message-box-input">
               <textarea
@@ -161,7 +161,7 @@ export default function LogComplaint(){
                 rows={2}
                 onChange={e=>{setMessage(e.target.value);autoResize();}}
                 onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();process(message);}}}
-                placeholder="Type a message, paste a complaint or email\u2026"
+                placeholder="Type a message, paste a complaint or email…"
               />
               <button className="send-message" disabled={!message.trim()||loading} onClick={()=>process(message)}>
                 <Send size={17}/>
