@@ -50,7 +50,10 @@ def extract(s):
         provider=get_llm_provider()
         if provider:
             model=provider.structured(f'{EXTRACTION}\nComplaint:\n{t}', ExtractionOutput)
-            x={**x, **{k:v for k,v in model.model_dump().items() if v is not None}}
+            provider_facts={k:v for k,v in model.model_dump().items() if v is not None}
+            for field in ('manufacturing_date','expiry_date','complaint_date','received_date'):
+                if provider_facts.get(field): provider_facts[field]=iso_date(provider_facts[field])
+            x={**x, **provider_facts}
     except Exception as exc:
         return {'extracted_complaint':x,'extraction_confidence':{k:(.78 if v else 0) for k,v in x.items()},'errors':[f'LLM extraction unavailable; used local intake parser: {type(exc).__name__}'], **_stage(s,'Complaint extracted')}
     return {'extracted_complaint':x,'extraction_confidence':{k:(.9 if v else 0) for k,v in x.items()}, **_stage(s,'Complaint extracted')}
