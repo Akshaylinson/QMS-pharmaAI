@@ -2,7 +2,7 @@ import {useRef,useState} from 'react';
 import {useDispatch,useSelector} from 'react-redux';
 import {runIntake,saveComplaint,reset,loadComplaints,loadDashboard} from '../store';
 import {api} from '../services/api';
-import {FlaskConical,Paperclip,Send,Check,CheckCircle2,ShieldCheck,FileText,UserRound,Sparkles,RotateCcw} from 'lucide-react';
+import {FlaskConical,Paperclip,Send,Check,CheckCircle2,ShieldCheck,FileText,UserRound,Sparkles,RotateCcw,Lightbulb,ListChecks,FileCheck2} from 'lucide-react';
 
 const WELCOME='Ready to process new complaints. Paste the customer email, describe the issue, or upload a complaint report. I\u2019ll extract the facts and run an initial risk assessment.';
 
@@ -30,7 +30,7 @@ const label=name=>name.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 const welcomeMsg=()=>({role:'assistant',kind:'welcome',text:WELCOME});
 
 export default function LogComplaint(){
-  const dispatch=useDispatch(),form=useSelector(s=>s.complaint.form),loading=useSelector(s=>s.complaint.loading),error=useSelector(s=>s.complaint.error);
+  const dispatch=useDispatch(),form=useSelector(s=>s.complaint.form),loading=useSelector(s=>s.complaint.loading),error=useSelector(s=>s.complaint.error),analysis=useSelector(s=>s.complaint.analysis);
   const [message,setMessage]=useState('');
   const [messages,setMessages]=useState([welcomeMsg()]);
   const [notice,setNotice]=useState('');
@@ -147,6 +147,56 @@ export default function LogComplaint(){
               <label className="wide">Initial Risk Assessment<div className="read-value risk-reason">{form.initial_risk_assessment||'The copilot will assess the reported facts after intake.'}</div></label>
             </div>
           </section>
+
+          {/* AI Summary: Root Cause, CAPA, Complaint Summary */}
+          {analysis&&(
+            <section className="ai-summary-card">
+              <div className="ai-summary-heading">
+                <Sparkles size={19}/>
+                <b>AI Analysis Summary</b>
+                <span className="ai-summary-badge">Copilot Generated</span>
+              </div>
+
+              {analysis.root_causes?.length>0&&(
+                <div className="ai-summary-block">
+                  <div className="ai-summary-block-title"><Lightbulb size={15}/>Root Cause Recommendation</div>
+                  <ul className="ai-summary-list">
+                    {analysis.root_causes.map((c,i)=><li key={i}>{c}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {(analysis.capa?.corrective_actions?.length>0||analysis.capa?.preventive_actions?.length>0)&&(
+                <div className="ai-summary-block">
+                  <div className="ai-summary-block-title"><ListChecks size={15}/>CAPA Recommendations</div>
+                  {analysis.capa.corrective_actions?.length>0&&(
+                    <>
+                      <p className="ai-summary-sub">Corrective Actions</p>
+                      <ul className="ai-summary-list">
+                        {analysis.capa.corrective_actions.map((a,i)=><li key={i}>{a}</li>)}
+                      </ul>
+                    </>
+                  )}
+                  {analysis.capa.preventive_actions?.length>0&&(
+                    <>
+                      <p className="ai-summary-sub">Preventive Actions</p>
+                      <ul className="ai-summary-list">
+                        {analysis.capa.preventive_actions.map((a,i)=><li key={i}>{a}</li>)}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {analysis.summary&&(
+                <div className="ai-summary-block ai-summary-block--last">
+                  <div className="ai-summary-block-title"><FileCheck2 size={15}/>Complaint Summary</div>
+                  <p className="ai-summary-text">{analysis.summary}</p>
+                </div>
+              )}
+            </section>
+          )}
+
           <div className="commit-buttons">
             <button className="reset-button" disabled={loading} onClick={handleReset}><RotateCcw size={19}/>Reset Form</button>
             <button className="commit-button" disabled={loading} onClick={commit}><Check size={19}/>{loading?'Processing\u2026':'Save Complaint'}</button>
