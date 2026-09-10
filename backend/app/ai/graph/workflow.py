@@ -17,19 +17,20 @@ def extract(s):
         return match.group(1).strip(' .,;:') if match else None
     def iso_date(value):
         if not value: return None
-        for pattern in ('%B %Y','%b %Y','%d/%m/%Y','%d-%m-%Y','%m/%d/%Y','%m-%d-%Y'):
-            try: return datetime.strptime(value,pattern).date().isoformat()
+        # Strip ordinal suffixes: 1st → 1, 2nd → 2, etc.
+        cleaned=re.sub(r'(\d+)(?:st|nd|rd|th)\b',r'\1',value.strip())
+        for pattern in ('%B %d, %Y','%b %d, %Y','%B %d %Y','%b %d %Y','%B %Y','%b %Y','%d/%m/%Y','%d-%m-%Y','%m/%d/%Y','%m-%d-%Y'):
+            try: return datetime.strptime(cleaned,pattern).date().isoformat()
             except ValueError: pass
         return value
     x={
-        'customer_name':get(r'(?:^|\b)([A-Z][\w .&-]+?)\s+(?:reported|reports|has reported|complains|stated)') or get(r'(?:customer|from|by)\s+([A-Z][\w .&-]+?)(?:\s+(?:reports|states|has|complains|said)|[,.])'),
         'source':get(r'(?:received\s+(?:via|by|through)|source\s*(?:is|:)?)\s*(email|phone|portal|fax|pharmacy|distributor|hospital|web\s+portal)') or ('Email' if 'email' in low else None),
         'product_name':get(r'(?:of|for)\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*(?:\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhaler))?)(?=\s+\d|\s+batch|\s+lot|[,.]|$)') or get(r'([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*(?:\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhaler)))'),
         'product_strength':get(r'(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|mL|%|IU))'),
         'batch_number':get(r'(?:batch|lot)(?:\s+(?:number|no\.?))?\s*(?:is|:|#)?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})'),
         'affected_quantity':get(r'(\d+\s+(?:discolou?red\s+|damaged\s+|broken\s+)?(?:capsules?|tablets?|packs?|units?|vials?|bottles?|drums?))') or get(r'(\d+\s+(?:capsules?|tablets?|packs?|units?|vials?|bottles?))'),
-        'manufacturing_date':iso_date(get(r'manufactur(?:ing|ed)\s+(?:in\s+)?([A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
-        'expiry_date':iso_date(get(r'expir(?:y|ing|ation)\s+(?:in\s+|date\s+)?([A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
+        'manufacturing_date':iso_date(get(r'manufactur(?:ing|ed)\s+(?:date\s+(?:as|is|:)?\s*|in\s+)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
+        'expiry_date':iso_date(get(r'expir(?:y|ing|ation|ed)\s+(?:date\s+(?:as|is|:)?\s*|in\s+)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
         'originating_site':get(r'(?:originated?\s+from|originating\s+site|site\s+block)\s+([A-Za-z0-9][\w .-]+?)(?=[,.]|$|\s+and)'),
         'impacted_materials':get(r'((?:primary|secondary)\s+packaging\s+material[^.,]*)'),
     }
@@ -43,6 +44,8 @@ def extract(s):
     if any(w in low for w in ['email','phone','portal','fax']): x['source']=x.get('source') or next((w.title() for w in ['email','phone','portal','fax'] if w in low),None)
     x={k:v for k,v in x.items() if v not in (None,'')}
     # When configured, the remote provider produces the extraction; local parsing is a transparent no-credential fallback for demo intake.
+    # Semantic fields (customer_name, originating_site) are LLM-only — regex is too error-prone for them.
+    SEMANTIC_FIELDS={'customer_name','originating_site','impacted_materials','complaint_type','description'}
     try:
         from app.ai.providers.factory import get_llm_provider
         from app.schemas.ai import ExtractionOutput
@@ -53,6 +56,8 @@ def extract(s):
             provider_facts={k:v for k,v in model.model_dump().items() if v is not None}
             for field in ('manufacturing_date','expiry_date','complaint_date','received_date'):
                 if provider_facts.get(field): provider_facts[field]=iso_date(provider_facts[field])
+            # LLM wins on all fields; for semantic fields remove any regex guess first
+            for f in SEMANTIC_FIELDS: x.pop(f,None)
             x={**x, **provider_facts}
     except Exception as exc:
         return {'extracted_complaint':x,'extraction_confidence':{k:(.78 if v else 0) for k,v in x.items()},'errors':[f'LLM extraction unavailable; used local intake parser: {type(exc).__name__}'], **_stage(s,'Complaint extracted')}
@@ -60,8 +65,9 @@ def extract(s):
 def normalize(s):
     base={k:v for k,v in s.get('current_complaint',{}).items() if v not in (None,'')}
     updates={k:v for k,v in s['extracted_complaint'].items() if v not in (None,'')}
-    # Do not let a correction turn replace the original narrative with a one-line correction.
-    if 'description' not in updates: updates.pop('description',None)
+    # Preserve the original description unless the new turn is itself a full complaint narrative.
+    if 'description' in updates and base.get('description') and len(updates['description'])<len(base.get('description',''))*0.8:
+        updates.pop('description')
     return {'normalized_complaint':{**base,**updates}, 'updated_fields':list(updates), **_stage(s,'Information normalized')}
 def completeness(s):
     x=s['normalized_complaint']; missing=[f for f in ['customer_name','product_name','batch_number','description'] if not x.get(f)]; status='COMPLETE' if not missing else ('PARTIALLY_COMPLETE' if len(missing)<3 else 'INCOMPLETE'); return {'missing_fields':missing,'completeness_assessment':{'status':status,'missing_fields':missing,'questions_to_ask':[f'Please provide {m.replace("_"," ")}.' for m in missing],'confidence':round(1-len(missing)/4,2)},**_stage(s,'Completeness checked')}
