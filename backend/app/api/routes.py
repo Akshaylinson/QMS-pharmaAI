@@ -102,6 +102,14 @@ def analytics(db:Session=Depends(get_db)):
     by_date=defaultdict(int)
     for c in cs: by_date[c.created_at.strftime('%Y-%m-%d')]+=1
     complaints_over_time=[{'date':d,'count':v} for d,v in sorted(by_date.items())]
+    # complaints per day broken down by status
+    by_date_status=defaultdict(lambda:defaultdict(int))
+    for c in cs:
+        day=c.created_at.strftime('%Y-%m-%d')
+        by_date_status[day]['total']+=1
+        if c.status: by_date_status[day][norm(c.status.replace('_',' '))]+=1
+    all_statuses=sorted({norm(c.status.replace('_',' ')) for c in cs if c.status})
+    complaints_over_time=[{'date':d,'total':v['total'],**{s:v.get(s,0) for s in all_statuses}} for d,v in sorted(by_date_status.items())]
     by_month=defaultdict(int)
     for c in cs: by_month[c.created_at.strftime('%b %Y')]+=1
     complaints_by_month=[{'month':m,'count':v} for m,v in sorted(by_month.items(),key=lambda x:x[0])]
@@ -139,4 +147,4 @@ def analytics(db:Session=Depends(get_db)):
     for c in cs:
         if c.source: by_source[norm(c.source)]+=1
     source_breakdown=[{'source':k,'count':v} for k,v in sorted(by_source.items(),key=lambda x:-x[1])]
-    return {'complaints_over_time':complaints_over_time,'complaints_by_month':complaints_by_month,'severity_breakdown':severity_breakdown,'risk_breakdown':risk_breakdown,'status_breakdown':status_breakdown,'top_customers':top_customers,'top_products':top_products,'complaint_types':complaint_types,'severity_over_time':severity_over_time,'source_breakdown':source_breakdown}
+    return {'complaints_over_time':complaints_over_time,'all_statuses':all_statuses,'complaints_by_month':complaints_by_month,'severity_breakdown':severity_breakdown,'risk_breakdown':risk_breakdown,'status_breakdown':status_breakdown,'top_customers':top_customers,'top_products':top_products,'complaint_types':complaint_types,'severity_over_time':severity_over_time,'source_breakdown':source_breakdown}
