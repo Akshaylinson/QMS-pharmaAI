@@ -26,6 +26,13 @@ html,body,#root{height:100%;overflow:hidden}.main-content{overflow-x:hidden}.mai
 .completeness-textarea{width:100%;border:1px solid #d4dce8;border-radius:8px;padding:11px 13px;font:14px Inter;color:#25364a;resize:vertical;min-height:88px;margin-bottom:20px;outline:none;transition:border-color .15s;box-sizing:border-box}
 .completeness-textarea:focus{border-color:#1264d6;box-shadow:0 0 0 3px #1264d614}
 .completeness-actions{display:flex;gap:10px;justify-content:flex-end}
+.missing-field-row{display:flex;flex-direction:column;gap:5px;background:#f4f8ff;border:1px solid #d4e4f7;border-radius:7px;padding:10px 13px}
+.missing-field-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#1264d6}
+.missing-field-input{border:1px solid #d4dce8;border-radius:6px;padding:7px 10px;font:13px Inter;color:#25364a;outline:none;transition:border-color .15s;background:#fff}
+.missing-field-input:focus{border-color:#1264d6;box-shadow:0 0 0 3px #1264d614}
+.completeness-direct-actions{display:flex;gap:10px;justify-content:flex-end;margin-bottom:18px}
+.completeness-divider{display:flex;align-items:center;gap:10px;margin:4px 0 14px;color:#a8b4c2;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.completeness-divider::before,.completeness-divider::after{content:'';flex:1;height:1px;background:#e5eaf1}
 
 @media(max-width:720px){.an-stats{grid-template-columns:repeat(2,1fr)}}
 

@@ -42,7 +42,7 @@ def extract(s):
             context_hint=''
             if current:
                 filled=[f"{k}: {v}" for k,v in current.items() if v and k not in ('severity','priority','risk_level','suggested_next_action','initial_risk_assessment','status')]
-                if filled: context_hint=f'\n\nAlready extracted (do NOT overwrite with null, only update if new value given):\n'+'; '.join(filled)
+                if filled: context_hint='\n\nAlready filled (only overwrite if the new text explicitly instructs a change to that field):\n'+'; '.join(filled)
             model=provider.structured(f'{EXTRACTION}{context_hint}\n\nText to extract from:\n{t}', ExtractionOutput)
             x={k:v for k,v in model.model_dump().items() if v is not None}
             for field in ('manufacturing_date','expiry_date','complaint_date','received_date'):

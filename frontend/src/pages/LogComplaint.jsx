@@ -35,8 +35,9 @@ export default function LogComplaint(){
   const [messages,setMessages]=useState([welcomeMsg()]);
   const [notice,setNotice]=useState('');
   const [dialog,setDialog]=useState(null);
-  const [completenessDialog,setCompletenessDialog]=useState(null); // {missingFields, fillText}
+  const [completenessDialog,setCompletenessDialog]=useState(null);
   const [fillText,setFillText]=useState('');
+  const [directValues,setDirectValues]=useState({});
   const [dragging,setDragging]=useState(false);
   const fileInput=useRef();
   const textareaRef=useRef();
@@ -90,6 +91,7 @@ export default function LogComplaint(){
     // Gate: show completeness checker if any required field is missing
     if(!allComplete){
       setFillText('');
+      setDirectValues({});
       setCompletenessDialog(missingRequired);
       return;
     }
@@ -100,6 +102,14 @@ export default function LogComplaint(){
     }catch(err){
       setDialog({type:'error',message:err instanceof Error&&err.message?err.message:'Unable to commit the complaint. Please review the entered complaint details and try again.'});
     }
+  }
+
+  function handleDirectSave(){
+    Object.entries(directValues).forEach(([key,val])=>{
+      if(val.trim()) dispatch({type:'complaint/setField',payload:{name:key,value:val.trim()}});
+    });
+    setCompletenessDialog(null);
+    setDirectValues({});
   }
 
   async function handleFillMissing(){
@@ -263,26 +273,40 @@ export default function LogComplaint(){
               <p>Some required fields are missing. Provide the details below and the Copilot will fill them in automatically.</p>
             </div>
             <div className="completeness-dialog-body">
-              <p className="missing-fields-label">Missing fields</p>
+              <p className="missing-fields-label">Missing fields — enter values directly</p>
               <ul className="missing-fields-list">
-                {completenessDialog.map(([,title])=>(
-                  <li key={title}><span className="missing-dot"/>{title}</li>
+                {completenessDialog.map(([key,title])=>(
+                  <li key={key} className="missing-field-row">
+                    <span className="missing-field-label">{title}</span>
+                    <input
+                      className="missing-field-input"
+                      type="text"
+                      placeholder={`Enter ${title.toLowerCase()}…`}
+                      value={directValues[key]||''}
+                      onChange={e=>setDirectValues(v=>({...v,[key]:e.target.value}))}
+                    />
+                  </li>
                 ))}
               </ul>
-              <p className="completeness-fill-label">Provide the missing details</p>
-              <p className="completeness-fill-hint">Type naturally, e.g. &ldquo;Complaint source is Email, expiry date is March 2028, affected quantity is 3 vials&rdquo;</p>
+              <div className="completeness-direct-actions">
+                <button className="outline" onClick={()=>setCompletenessDialog(null)}>Cancel</button>
+                <button className="primary" disabled={!Object.values(directValues).some(v=>v.trim())} onClick={handleDirectSave}>
+                  <Check size={15}/>Apply Directly
+                </button>
+              </div>
+              <div className="completeness-divider"><span>or describe to Copilot</span></div>
+              <p className="completeness-fill-hint">e.g. “Complaint source is Email, expiry date is March 2028”</p>
               <textarea
                 className="completeness-textarea"
                 value={fillText}
                 onChange={e=>setFillText(e.target.value)}
-                placeholder="Enter the missing field values here…"
-                rows={4}
-                autoFocus
+                placeholder="Describe the missing details…"
+                rows={3}
               />
               <div className="completeness-actions">
                 <button className="outline" onClick={()=>setCompletenessDialog(null)}>Cancel</button>
                 <button className="primary" disabled={!fillText.trim()||loading} onClick={handleFillMissing}>
-                  <Check size={15}/>Add to Copilot
+                  <Check size={15}/>Send to Copilot
                 </button>
               </div>
             </div>

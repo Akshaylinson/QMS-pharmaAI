@@ -4,12 +4,13 @@ EXTRACTION = '''You are a pharmaceutical QMS intake specialist. Your job is to e
 
 customer_name:
   The person or organisation who FILED the complaint.
-  Look for these patterns (in order of priority):
-    1. Direct override in chat: "add customer name as X", "set customer name to X", "customer name is X" → use X exactly.
-    2. Email/letter header: "From: Dr. Elena Vasquez" or "From: Central City Hospital Pharmacy" → use the name/org after "From:".
-    3. Sign-off block at the bottom: "Yours faithfully, John Smith", "Regards, Apollo Pharmacy", "Sincerely, Dr. Lee" → use the name/org after the sign-off word.
-    4. Explicit label: "Customer: X", "Reported by: X", "Submitted by: X".
-  NEVER use: internal site names, action phrases ("use and quarantine"), product names, or department names as customer_name.
+  PRIORITY ORDER — stop at the first match:
+    1. Explicit chat override (HIGHEST PRIORITY — always wins even if a value already exists):
+       "update customer name as X", "customer name is X", "set customer name to X", "change customer name to X", "name is X" → use X exactly, no matter what.
+    2. Email/letter header: "From: Dr. Elena Vasquez" → use the name after "From:".
+    3. Sign-off block: "Yours faithfully, John Smith", "Regards, Apollo Pharmacy" → use the name after the sign-off.
+    4. Explicit label: "Customer: X", "Reported by: X".
+  NEVER use: internal site names, action phrases, product names, or department names.
 
 source:
   How the complaint was received. Values: Email / Phone / Portal / Fax / Manual entry.
@@ -66,14 +67,23 @@ description:
   A correction message is short (under ~100 words) and only instructs field changes.
 
 complaint_type:
-  Category of defect. Infer from description if not labeled:
-    "Foreign Particle / Contamination" → "Product Defect - Foreign Matter"
-    "Discoloration" → "Product Defect - Discoloration"
-    "Packaging" / "Blister" → "Packaging Defect"
-    "Broken" / "Damaged" → "Product Defect"
+  Category of defect.
+  PRIORITY ORDER:
+    1. Explicit chat override (HIGHEST PRIORITY — always wins):
+       "complaint category is X", "complaint type is X", "category is X", "set complaint category to X", "update complaint category as X" → use X exactly as given.
+    2. Labeled in document: "Complaint Type : Foreign Particle / Contamination" → map to canonical value.
+    3. Infer from description:
+       "Foreign Particle" / "Contamination" / "particulate" → "Product Defect - Foreign Matter"
+       "Discoloration" / "discolour" / "color" → "Product Defect - Discoloration"
+       "Packaging" / "Blister" / "seal" → "Packaging Defect"
+       "Broken" / "Damaged" / "defect" → "Product Defect"
+  When the user says "foreign particle" in a chat override, return "Product Defect - Foreign Matter".
 
 patient_impact: HIGH / MEDIUM / LOW / NONE based on patient risk described.
 safety_concern: true only if patient harm is reported or likely.
+
+== IMPORTANT: CHAT OVERRIDE RULE ==
+When the input is a short correction message (under ~120 words) that explicitly instructs a field change using words like "update", "change", "set", "add", "is", "should be" — that instruction ALWAYS takes priority over any previously known value. Extract ONLY the fields being changed. Return null for everything else.
 
 == OUTPUT ==
 Return ONLY valid JSON matching the schema. Use null for any field not clearly present. Never invent data.'''
