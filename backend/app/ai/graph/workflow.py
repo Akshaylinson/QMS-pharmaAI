@@ -22,16 +22,16 @@ def extract(s):
             except ValueError: pass
         return value
     x={
-        'customer_name':get(r'(?:customer|from)\s+([A-Z][\w .&-]+?)(?:\s+(?:reports|states|has|complains|said)|[,.])') or get(r'^([A-Z][\w .&-]+?)\s+(?:reported|reports|states|complains)'),
-        'source':get(r'(?:source|received\s+via)\s*(?:is|:)?\s*(email|pharmacy|distributor|hospital|phone|web portal)'),
-        'product_name':get(r'(?:product(?:\s+name)?\s*(?:is|:)?|for|in)\s+([A-Za-z][\w -]+?)(?=\s+(?:\d+\s*(?:mg|ml|g|%)|batch|lot)|[,.])'),
-        'product_strength':get(r'(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|%))'),
-        'batch_number':get(r'(?:batch|lot)(?:\s+(?:number|no\.?))?\s*(?:is|:|#)?\s*([A-Za-z0-9][A-Za-z0-9-]+)'),
-        'affected_quantity':get(r'(?:affected\s+(?:quantity|qty)(?:\s+is)?\s*[:=]?\s*|\b)(\d+\s*(?:capsules?|tablets?|packs?|units?|vials?|bottles?|drums?|kg|g))') or get(r'(\d+\s+(?:\w+\s+){0,2}(?:capsules?|tablets?|packs?|units?|vials?|bottles?|drums?))'),
-        'manufacturing_date':iso_date(get(r'(?:manufactur(?:ing|ed)\s+date|mfg(?:\.?\s*date)?)\s*(?:is|:)?\s*([A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
-        'expiry_date':iso_date(get(r'(?:expiry|expiration|exp(?:iry)?\s+date)\s*(?:is|:)?\s*([A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
-        'originating_site':get(r'(?:originating\s+(?:site|block)|site\s+block)\s*(?:is|:)?\s*([A-Za-z0-9][\w .-]+?)(?=[,.]|$)'),
-        'impacted_materials':get(r'(?:impacted\s+(?:non-product\s+)?materials?|npm)\s*(?:are|is|:)?\s*([A-Za-z0-9][\w ,/&()-]+?)(?=[.]|$)'),
+        'customer_name':get(r'(?:^|\b)([A-Z][\w .&-]+?)\s+(?:reported|reports|has reported|complains|stated)') or get(r'(?:customer|from|by)\s+([A-Z][\w .&-]+?)(?:\s+(?:reports|states|has|complains|said)|[,.])'),
+        'source':get(r'(?:received\s+(?:via|by|through)|source\s*(?:is|:)?)\s*(email|phone|portal|fax|pharmacy|distributor|hospital|web\s+portal)') or ('Email' if 'email' in low else None),
+        'product_name':get(r'(?:of|for)\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*(?:\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhaler))?)(?=\s+\d|\s+batch|\s+lot|[,.]|$)') or get(r'([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*(?:\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhaler)))'),
+        'product_strength':get(r'(\d+(?:\.\d+)?\s*(?:mg|mcg|g|ml|mL|%|IU))'),
+        'batch_number':get(r'(?:batch|lot)(?:\s+(?:number|no\.?))?\s*(?:is|:|#)?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})'),
+        'affected_quantity':get(r'(\d+\s+(?:discolou?red\s+|damaged\s+|broken\s+)?(?:capsules?|tablets?|packs?|units?|vials?|bottles?|drums?))') or get(r'(\d+\s+(?:capsules?|tablets?|packs?|units?|vials?|bottles?))'),
+        'manufacturing_date':iso_date(get(r'manufactur(?:ing|ed)\s+(?:in\s+)?([A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
+        'expiry_date':iso_date(get(r'expir(?:y|ing|ation)\s+(?:in\s+|date\s+)?([A-Za-z]+\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})')),
+        'originating_site':get(r'(?:originated?\s+from|originating\s+site|site\s+block)\s+([A-Za-z0-9][\w .-]+?)(?=[,.]|$|\s+and)'),
+        'impacted_materials':get(r'((?:primary|secondary)\s+packaging\s+material[^.,]*)'),
     }
     # A first complaint message is the formal record; correction messages should not overwrite it.
     if not s.get('current_complaint', {}).get('description') or any(w in low for w in ['reported', 'complaint', 'defect', 'contamination', 'discolor', 'broken', 'damaged']):
@@ -40,7 +40,7 @@ def extract(s):
     elif any(w in low for w in ['blister','packaging','seal']): x['complaint_type']='Packaging Defect'
     elif any(w in low for w in ['foreign matter','foreign particle','contamination','particulate']): x['complaint_type']='Product Defect - Foreign Matter'
     elif any(w in low for w in ['broken','damaged','defect']): x['complaint_type']='Product Defect'
-    if any(w in low for w in ['email','pharmacy','distributor','hospital']): x['source']=x['source'] or next((w.title() for w in ['email','pharmacy','distributor','hospital'] if w in low),None)
+    if any(w in low for w in ['email','phone','portal','fax']): x['source']=x.get('source') or next((w.title() for w in ['email','phone','portal','fax'] if w in low),None)
     x={k:v for k,v in x.items() if v not in (None,'')}
     # When configured, the remote provider produces the extraction; local parsing is a transparent no-credential fallback for demo intake.
     try:
