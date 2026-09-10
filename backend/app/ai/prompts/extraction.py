@@ -28,18 +28,27 @@ batch_number:
   Look for: "Batch Number :", "Batch No:", "Lot :", "Lot Number:".
 
 manufacturing_date:
-  Date of manufacture. Accept ANY of these formats and return as-is (do not reformat):
-    - ISO: "2025-09-10"
-    - Labeled: "Manufacturing : 2025-09-10", "Manufacturing Date : September 2025", "Mfg Date: 10/09/2025"
-    - Ordinal chat: "manufacturing date as September 1st, 2026" → "September 1, 2026"
-    - Direct override: "update manufacturing date to X", "set manufacturing date as X" → use X.
+  Date of manufacture. Extract whatever date information is present and return it as a string.
+  IMPORTANT: If only month and year are given (e.g. "March 2026", "manufactured in March 2026", "Mfg: March 2026"), return exactly "March 2026".
+  If a full date is given, return it as "March 10, 2026" or "2026-03-10".
+  Accept ALL of these patterns:
+    - Month+year only: "March 2026", "manufactured in March 2026", "Manufacturing : March 2026", "Mfg Date: 03/2026"
+    - Full date ISO: "2025-09-10"
+    - Full date labeled: "Manufacturing : 2025-09-10", "Manufacturing Date : September 10, 2025"
+    - Ordinal: "manufactured on September 1st, 2026" → "September 1, 2026"
+    - Chat override: "manufacturing date is X", "manufacturing date as X", "manufactured in X", "Mfg date should be X" → use X.
+  NEVER return null if any date-like value is present near the word "manufactur" or "mfg".
 
 expiry_date:
-  Expiry/expiration date. Accept ANY of these formats:
-    - ISO: "2027-09-09"
-    - Labeled: "Expiry Date : 2027-09-09", "Expiry : September 2027", "Exp Date: 09/2027"
-    - Ordinal chat: "expired date as September 24th, 2029" → "September 24, 2029"
-    - Direct override: "update expiry date to X", "set expiry date as X" → use X.
+  Expiry/expiration date. Extract whatever date information is present.
+  IMPORTANT: If only month and year are given (e.g. "February 2028", "expiring in February 2028"), return exactly "February 2028".
+  Accept ALL of these patterns:
+    - Month+year only: "February 2028", "expiring in February 2028", "Expiry : Feb 2028", "Exp: 02/2028"
+    - Full date ISO: "2027-09-09"
+    - Full date labeled: "Expiry Date : 2027-09-09", "Expiry : September 2027"
+    - Ordinal: "expiring on September 24th, 2029" → "September 24, 2029"
+    - Chat override: "expiry date is X", "expiry date as X", "expired date as X", "expiring in X" → use X.
+  NEVER return null if any date-like value is present near the word "expir" or "exp".
 
 affected_quantity:
   Number and unit of affected product (e.g. "6 vials", "12 capsules").

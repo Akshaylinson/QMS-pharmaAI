@@ -13,11 +13,22 @@ def extract(s):
     """LLM is the primary extractor. Regex is a zero-dependency fallback only."""
     t=s['raw_input']; low=t.lower()
     def iso_date(value):
+        """Convert any fuzzy date string to ISO. Month-only → first of month. Never drops a value."""
         if not value: return None
-        cleaned=re.sub(r'(\d+)(?:st|nd|rd|th)\b',r'\1',str(value).strip())
-        for fmt in ('%Y-%m-%d','%B %d, %Y','%b %d, %Y','%B %d %Y','%b %d %Y','%B %Y','%b %Y','%d/%m/%Y','%d-%m-%Y','%m/%d/%Y','%m-%d-%Y'):
-            try: return datetime.strptime(cleaned,fmt).date().isoformat()
+        v=re.sub(r'(\d+)(?:st|nd|rd|th)\b',r'\1',str(value).strip().strip('.,;:'))
+        # Try formats from most specific to least
+        for fmt in ('%Y-%m-%d','%d/%m/%Y','%d-%m-%Y','%m/%d/%Y','%m-%d-%Y',
+                    '%B %d, %Y','%b %d, %Y','%B %d %Y','%b %d %Y',
+                    '%m/%Y','%m-%Y',
+                    '%B %Y','%b %Y'):
+            try: return datetime.strptime(v,fmt).date().isoformat()
             except ValueError: pass
+        # Handle "MM/YYYY" or "MM-YYYY" style
+        m=re.match(r'^(\d{1,2})[/\-](\d{4})$',v)
+        if m:
+            try: return datetime(int(m.group(2)),int(m.group(1)),1).date().isoformat()
+            except ValueError: pass
+        # Return original string if unparseable — better than losing the value
         return value
     # --- Primary path: LLM extraction ---
     try:
@@ -26,12 +37,18 @@ def extract(s):
         from app.ai.prompts.extraction import EXTRACTION
         provider=get_llm_provider()
         if provider:
-            model=provider.structured(f'{EXTRACTION}\n\nText to extract from:\n{t}', ExtractionOutput)
+            # Pass current form state so LLM knows what's already filled
+            current=s.get('current_complaint',{})
+            context_hint=''
+            if current:
+                filled=[f"{k}: {v}" for k,v in current.items() if v and k not in ('severity','priority','risk_level','suggested_next_action','initial_risk_assessment','status')]
+                if filled: context_hint=f'\n\nAlready extracted (do NOT overwrite with null, only update if new value given):\n'+'; '.join(filled)
+            model=provider.structured(f'{EXTRACTION}{context_hint}\n\nText to extract from:\n{t}', ExtractionOutput)
             x={k:v for k,v in model.model_dump().items() if v is not None}
             for field in ('manufacturing_date','expiry_date','complaint_date','received_date'):
                 if x.get(field): x[field]=iso_date(x[field])
             return {'extracted_complaint':x,'extraction_confidence':{k:.92 for k in x}, **_stage(s,'Complaint extracted')}
-    except Exception as exc:
+    except Exception:
         pass  # fall through to regex fallback
     # --- Fallback path: regex (no LLM credentials) ---
     def get(pattern):
@@ -56,11 +73,15 @@ def extract(s):
     return {'extracted_complaint':x,'extraction_confidence':{k:.72 for k in x},'errors':['LLM unavailable; used local regex fallback.'], **_stage(s,'Complaint extracted')}
 def normalize(s):
     base={k:v for k,v in s.get('current_complaint',{}).items() if v not in (None,'')}
+    # Only apply fields the LLM actually extracted (non-null) — never let a null overwrite a good value
     updates={k:v for k,v in s['extracted_complaint'].items() if v not in (None,'')}
-    # Preserve the original description unless the new turn is itself a full complaint narrative.
-    if 'description' in updates and base.get('description') and len(updates['description'])<len(base.get('description',''))*0.8:
+    # Preserve the original description unless the new turn is a longer/richer narrative
+    if 'description' in updates and base.get('description') and len(str(updates['description']))<len(str(base.get('description','')))*0.8:
         updates.pop('description')
-    return {'normalized_complaint':{**base,**updates}, 'updated_fields':list(updates), **_stage(s,'Information normalized')}
+    merged={**base,**updates}
+    # Track only fields that actually changed from base
+    changed=[k for k,v in updates.items() if str(base.get(k,''))!=str(v)]
+    return {'normalized_complaint':merged,'updated_fields':changed, **_stage(s,'Information normalized')}
 def completeness(s):
     x=s['normalized_complaint']; missing=[f for f in ['customer_name','product_name','batch_number','description'] if not x.get(f)]; status='COMPLETE' if not missing else ('PARTIALLY_COMPLETE' if len(missing)<3 else 'INCOMPLETE'); return {'missing_fields':missing,'completeness_assessment':{'status':status,'missing_fields':missing,'questions_to_ask':[f'Please provide {m.replace("_"," ")}.' for m in missing],'confidence':round(1-len(missing)/4,2)},**_stage(s,'Completeness checked')}
 def risk(s):

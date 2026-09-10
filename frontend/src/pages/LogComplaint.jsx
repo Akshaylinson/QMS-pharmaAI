@@ -104,8 +104,10 @@ export default function LogComplaint(){
 
   async function handleFillMissing(){
     if(!fillText.trim())return;
+    const text=fillText.trim();
     setCompletenessDialog(null);
-    await process(fillText.trim());
+    setFillText('');
+    await process(text);
   }
 
   function handleReset(){dispatch(reset());setMessages([welcomeMsg()]);setNotice('');}
