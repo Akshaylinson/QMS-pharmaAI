@@ -75,7 +75,22 @@ def copilot(body:CopilotRequest):
     elif 'summar' in q: answer=f"{c.get('customer_name') or 'Customer'} reported {c.get('complaint_type') or 'a complaint'} for {c.get('product_name') or 'an unspecified product'}; batch {c.get('batch_number') or 'not provided'}."
     else: answer='Insufficient information in the complaint.'
     return {'answer':answer,'requires_human_review':True}
-@router.get('/dashboard/statistics')
+@router.get('/settings/info')
+def settings_info():
+    from app.core.config import settings
+    return {
+        'llm_provider': settings.llm_provider,
+        'groq_model': settings.groq_model,
+        'gemini_model': settings.gemini_model,
+        'groq_configured': bool(settings.groq_api_key),
+        'gemini_configured': bool(settings.gemini_api_key),
+        'database_url': settings.database_url.split('@')[-1] if '@' in settings.database_url else settings.database_url,
+        'frontend_origin': settings.frontend_origin,
+        'version': '1.0.0',
+        'app_name': 'AIVOA.AI — Pharmaceutical QMS',
+    }
+
+
 def stats(db:Session=Depends(get_db)):
     cs=db.scalars(select(Complaint)).all(); counts=lambda field:{v:sum(1 for c in cs if getattr(c,field)==v) for v in set(getattr(c,field) for c in cs if getattr(c,field))}; return {'total':len(cs),'open':sum(c.status!='RESOLVED' for c in cs),'high_risk':sum(c.risk_level in ['HIGH','CRITICAL'] for c in cs),'critical':sum(c.risk_level=='CRITICAL' for c in cs),'pending_review':sum(c.status=='PENDING_REVIEW' for c in cs),'resolved':sum(c.status=='RESOLVED' for c in cs),'by_severity':counts('severity'),'by_status':counts('status'),'recent':[ComplaintOut.model_validate(c).model_dump(mode='json') for c in cs[:8]]}
 
