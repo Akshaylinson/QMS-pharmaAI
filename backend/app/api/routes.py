@@ -47,7 +47,8 @@ def delete(complaint_id:str,db:Session=Depends(get_db)):
     if not c: raise HTTPException(404,'Complaint not found')
     db.delete(c); db.commit()
 @router.post('/complaints/intake')
-def intake(body:IntakeRequest): return complaint_graph.invoke({'raw_input':body.raw_input,'source_type':body.source_type,'stages':[]})['final_response']
+def intake(body:IntakeRequest):
+    return complaint_graph.invoke({'raw_input':body.raw_input,'source_type':body.source_type,'current_complaint':body.current_complaint,'stages':[]})['final_response']
 @router.post('/documents/extract')
 async def document_extract(file:UploadFile=File(...)):
     try:
