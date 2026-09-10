@@ -76,15 +76,9 @@ export default function LogComplaint(){
   }
 
   function commitPayload(){
-    const months={january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',july:'07',august:'08',september:'09',october:'10',november:'11',december:'12'};
-    const payload={...form};
-    for(const field of ['manufacturing_date','expiry_date','complaint_date','received_date']){
-      const value=payload[field];
-      const match=typeof value==='string'&&value.trim().match(/^([a-zA-Z]+)\s+(\d{4})$/);
-      if(match&&months[match[1].toLowerCase()])payload[field]=`${match[2]}-${months[match[1].toLowerCase()]}-01`;
-    }
-    ['manufacturing_date','expiry_date','complaint_date','received_date'].forEach(f=>{if(payload[f]==='')payload[f]=null;});
-    return payload;
+    // Keep the customer's wording exactly as entered or extracted. The backend
+    // stores these values as text, so dates do not have to fit a guessed format.
+    return Object.fromEntries(Object.entries(form).map(([key,value])=>[key,value===''?null:value]));
   }
 
   async function commit(){

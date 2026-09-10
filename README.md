@@ -47,6 +47,7 @@ Backend:
 ```bash
 cd backend
 pip install -r requirements.txt
+alembic upgrade head
 uvicorn app.main:app --reload
 pytest
 ```
@@ -59,7 +60,7 @@ npm install
 npm run dev
 ```
 
-The initial Alembic revision is in `backend/alembic/versions`; the app also creates its mapped tables on startup so a clean Docker run is immediately usable. Run `alembic upgrade head` from `backend` in migration-managed deployments.
+The initial Alembic revision is in `backend/alembic/versions`; the Docker backend applies migrations automatically on startup. Run `alembic upgrade head` before starting the API locally, especially when upgrading an existing database.
 
 ## Known demonstration limits
 

@@ -1,6 +1,5 @@
 """Typed LangGraph complaint pipeline. Nodes have one responsibility and remain independently testable."""
 import re
-from datetime import datetime
 from typing import TypedDict, Any
 from langgraph.graph import StateGraph, START, END
 
@@ -12,24 +11,42 @@ def classify(s): return _stage(s, 'Input classified')
 def extract(s):
     """LLM is the primary extractor. Regex is a zero-dependency fallback only."""
     t=s['raw_input']; low=t.lower()
-    def iso_date(value):
-        """Convert any fuzzy date string to ISO. Month-only → first of month. Never drops a value."""
-        if not value: return None
-        v=re.sub(r'(\d+)(?:st|nd|rd|th)\b',r'\1',str(value).strip().strip('.,;:'))
-        # Try formats from most specific to least
-        for fmt in ('%Y-%m-%d','%d/%m/%Y','%d-%m-%Y','%m/%d/%Y','%m-%d-%Y',
-                    '%B %d, %Y','%b %d, %Y','%B %d %Y','%b %d %Y',
-                    '%m/%Y','%m-%Y',
-                    '%B %Y','%b %Y'):
-            try: return datetime.strptime(v,fmt).date().isoformat()
-            except ValueError: pass
-        # Handle "MM/YYYY" or "MM-YYYY" style
-        m=re.match(r'^(\d{1,2})[/\-](\d{4})$',v)
-        if m:
-            try: return datetime(int(m.group(2)),int(m.group(1)),1).date().isoformat()
-            except ValueError: pass
-        # Return original string if unparseable — better than losing the value
-        return value
+    def explicit_field_updates():
+        """Map a named form parameter to its value without interpreting it.
+
+        This path is deliberately run before AI extraction for chat corrections.
+        It means e.g. "set manufacturing date to batch cleared after rework" is
+        saved verbatim instead of being rejected or guessed as a date.
+        """
+        aliases={
+            'source': ('complaint source', 'source'),
+            'customer_name': ('customer name',),
+            'product_name': ('product name',),
+            'product_strength': ('product strength', 'strength', 'grade'),
+            'batch_number': ('batch / lot number', 'batch number', 'lot number', 'batch', 'lot'),
+            'affected_quantity': ('affected quantity', 'affected qty', 'quantity'),
+            'manufacturing_date': ('manufacturing date', 'manufacturing', 'mfg date', 'mfg'),
+            'expiry_date': ('expiry date', 'expiration date', 'expiry', 'expiration', 'exp date'),
+            'originating_site': ('originating site block', 'originating site', 'site block'),
+            'impacted_materials': ('impacted non-product materials', 'impacted materials', 'material impact'),
+            'complaint_type': ('complaint category', 'complaint type', 'category'),
+            'description': ('complaint description', 'description'),
+        }
+        updates={}
+        for field, names in aliases.items():
+            # Supports natural instructions and label/value text. Value is the
+            # rest of that line, not a value-shaped regex, by design.
+            joined='|'.join(re.escape(name) for name in sorted(names,key=len,reverse=True))
+            match=re.search(rf'(?:\b(?:change|update|set|add)\s+)?(?:{joined})\s*(?:as|is|to|should be|=|:|-)?\s*(.+?)(?:\n|$)',t,re.I)
+            if match:
+                value=match.group(1).strip()
+                if value:
+                    updates[field]=value
+        return updates
+
+    direct_updates=explicit_field_updates()
+    if direct_updates and len(t.split()) <= 120:
+        return {'extracted_complaint':direct_updates,'extraction_confidence':{k:.99 for k in direct_updates}, **_stage(s,'Named fields updated')}
     # --- Primary path: LLM extraction ---
     try:
         from app.ai.providers.factory import get_llm_provider
@@ -45,8 +62,6 @@ def extract(s):
                 if filled: context_hint='\n\nAlready filled (only overwrite if the new text explicitly instructs a change to that field):\n'+'; '.join(filled)
             model=provider.structured(f'{EXTRACTION}{context_hint}\n\nText to extract from:\n{t}', ExtractionOutput)
             x={k:v for k,v in model.model_dump().items() if v is not None}
-            for field in ('manufacturing_date','expiry_date','complaint_date','received_date'):
-                if x.get(field): x[field]=iso_date(x[field])
             return {'extracted_complaint':x,'extraction_confidence':{k:.92 for k in x}, **_stage(s,'Complaint extracted')}
     except Exception:
         pass  # fall through to regex fallback
@@ -61,11 +76,14 @@ def extract(s):
         'product_strength': get(r'Strength\s*[:\-]\s*([\d.]+\s*(?:mg|mcg|g|ml|mL|%|IU)[^\n]*)') or get(r'([\d.]+\s*(?:mg|mcg|g|ml|mL|%|IU))'),
         'batch_number': get(r'Batch\s+(?:Number|No\.?)\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9-]{3,})') or get(r'(?:batch|lot)\s*[:\-#]?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})'),
         'affected_quantity': get(r'Affected\s+Qty\s*[:\-]\s*([^\n]+?)(?:\n|$)') or get(r'(\d+\s+(?:capsules?|tablets?|packs?|units?|vials?|bottles?))'),
-        'manufacturing_date': iso_date(get(r'Manufacturing\s*[:\-]\s*([\d]{4}-[\d]{2}-[\d]{2}|[A-Za-z]+\s+\d{4}|[\d]{1,2}[/\-][\d]{1,2}[/\-][\d]{2,4})') or get(r'manufactur(?:ing|ed)\s+(?:date\s+(?:as|is|:)?\s*)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|[\d]{4}-[\d]{2}-[\d]{2})')),
-        'expiry_date': iso_date(get(r'Expiry\s+Date\s*[:\-]\s*([\d]{4}-[\d]{2}-[\d]{2}|[A-Za-z]+\s+\d{4}|[\d]{1,2}[/\-][\d]{1,2}[/\-][\d]{2,4})') or get(r'expir(?:y|ing|ation|ed)\s+(?:date\s+(?:as|is|:)?\s*)?([A-Za-z]+\s+\d+(?:st|nd|rd|th)?[,\s]+\d{4}|[A-Za-z]+\s+\d{4}|[\d]{4}-[\d]{2}-[\d]{2})')),
+        'manufacturing_date': get(r'Manufacturing\s*(?:Date)?\s*[:\-]\s*([^\n]+)') or get(r'manufactur(?:ing|ed)\s+(?:date\s+(?:as|is|:)?\s*)?([^\n.]+)'),
+        'expiry_date': get(r'(?:Expiry|Expiration)\s*(?:Date)?\s*[:\-]\s*([^\n]+)') or get(r'expir(?:y|ing|ation|ed)\s+(?:date\s+(?:as|is|:)?\s*)?([^\n.]+)'),
         'originating_site': get(r'(?:originating\s+site|site\s+block)\s*[:\-]\s*([A-Za-z0-9][\w .-]+?)(?=[,\n.]|$)'),
         'impacted_materials': get(r'((?:primary|secondary)\s+packaging\s+material[^.,]*)'),
     }
+    # Retain any labelled values the generic patterns did not cover, rather
+    # than requiring their values to match a preconceived format.
+    x={**x,**{key:value for key,value in direct_updates.items() if value}}
     if not s.get('current_complaint',{}).get('description') or any(w in low for w in ['reported','complaint','defect','contamination','discolor','broken','damaged','foreign']):
         x['description']=t
     if any(w in low for w in ['email','phone','portal','fax']): x['source']=x.get('source') or next((w.title() for w in ['email','phone','portal','fax'] if w in low),None)

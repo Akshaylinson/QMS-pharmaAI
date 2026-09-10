@@ -6,10 +6,16 @@ revision = '002_copilot_intake_fields'
 down_revision = '001_initial'
 
 def upgrade():
-    op.add_column('complaints', sa.Column('originating_site', sa.String(120)))
-    op.add_column('complaints', sa.Column('impacted_materials', sa.String(240)))
-    op.add_column('complaints', sa.Column('suggested_next_action', sa.String(240)))
-    op.add_column('complaints', sa.Column('initial_risk_assessment', sa.Text()))
+    existing={column['name'] for column in sa.inspect(op.get_bind()).get_columns('complaints')}
+    additions={
+        'originating_site': sa.String(120),
+        'impacted_materials': sa.String(240),
+        'suggested_next_action': sa.String(240),
+        'initial_risk_assessment': sa.Text(),
+    }
+    for name, column_type in additions.items():
+        if name not in existing:
+            op.add_column('complaints', sa.Column(name, column_type))
 
 def downgrade():
     op.drop_column('complaints', 'initial_risk_assessment')
