@@ -17,10 +17,11 @@ All deploy-specific values are environment variables; no frontend or backend bas
 
 - `VITE_API_BASE_URL` is injected into the frontend build.
 - `DATABASE_URL` points the backend at PostgreSQL.
-- `LLM_PROVIDER=groq|gemini` selects the provider.
-- `GROQ_API_KEY`, `GROQ_MODEL`, `GEMINI_API_KEY`, and `GEMINI_MODEL` stay server-side.
+- `LLM_PROVIDER=gemini|groq` selects the provider; Gemini is the default.
+- `GEMINI_API_KEY` is shared by `GEMINI_MODEL` (primary `gemini-3.7-flash`) and `GEMINI_FALLBACK_MODEL` (`gemini-2.5-flash`). `GEMINI_BASE_URL` defaults to Google's Gemini API host.
+- `GROQ_API_KEY`, `GROQ_MODEL`, and the Gemini settings stay server-side.
 
-The original brief named the retired Groq `gemma2-9b-it`; this project defaults to the configurable, current-compatible `llama-3.1-8b-instant`. Models are always remote APIs—no model weights are downloaded or run in Docker. Without credentials, intake remains demonstrable using a clearly labelled local parsing fallback, and every risk output remains an AI-assistance recommendation requiring human QA review.
+Models are always remote APIs—no model weights are downloaded or run in Docker. Without credentials, intake remains demonstrable using a clearly labelled local parsing fallback, and every risk output remains an AI-assistance recommendation requiring human QA review.
 
 ## Architecture
 

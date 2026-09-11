@@ -16,11 +16,13 @@ services:
     environment:
       DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://qms:qms@db:5432/qms}"
       FRONTEND_ORIGIN: "${FRONTEND_ORIGIN:-http://localhost:5173}"
-      LLM_PROVIDER: "${LLM_PROVIDER:-groq}"
+      LLM_PROVIDER: "${LLM_PROVIDER:-gemini}"
       GROQ_API_KEY: "${GROQ_API_KEY:-}"
-      GROQ_MODEL: "${GROQ_MODEL:-llama-3.1-8b-instant}"
+      GROQ_MODEL: "${GROQ_MODEL:-openai/gpt-oss-20b}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-2.5-flash}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.7-flash}"
+      GEMINI_FALLBACK_MODEL: "${GEMINI_FALLBACK_MODEL:-gemini-2.5-flash}"
+      GEMINI_BASE_URL: "${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com}"
     depends_on:
       db: { condition: service_healthy }
     ports: ["8000:8000"]

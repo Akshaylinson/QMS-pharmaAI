@@ -77,6 +77,11 @@ def extract(s):
                 if filled: context_hint='\n\nAlready filled (only overwrite if the new text explicitly instructs a change to that field):\n'+'; '.join(filled)
             model=provider.structured(f'{EXTRACTION}{context_hint}\n\nText to extract from:\n{t}', ExtractionOutput)
             x={k:v for k,v in model.model_dump().items() if v is not None}
+            if not x.get('complaint_type'):
+                if 'discolor' in low:
+                    x['complaint_type']='Product Discoloration'
+                elif any(word in low for word in ['blister','damaged','broken','crushed','tube removed','tubes removed']):
+                    x['complaint_type']='Packaging Damage'
             return {'extracted_complaint':x,'extraction_confidence':{k:.92 for k in x}, **_stage(s,'Complaint extracted')}
     except Exception:
         pass  # fall through to regex fallback
@@ -86,18 +91,18 @@ def extract(s):
         return m.group(1).strip(' .,;:') if m else None
     x={
         'source': get(r'(?:source\s*[:\-]\s*)(email|phone|portal|fax)') or ('Email' if 'email' in low else None),
-        'customer_name': get(r'(?:^|\n)From:\s*([^\n<]+?)(?:\s*[<,\n]|$)') or get(r'(?:yours\s+(?:faithfully|sincerely|truly)|regards|sincerely)[,\s]+([A-Z][\w .&-]+?)(?:\n|$)') or get(r'(?:customer|reported by|submitted by)\s*[:\-]\s*([A-Z][\w .&-]+?)(?:[,\n]|$)') or get(r'^(.*?)\s+(?:had|reported|submitted|raised)\s+(?:a\s+)?complaint\b'),
+        'customer_name': get(r'(?:^|\n)From:\s*([^\n<]+?)(?:\s*[<,\n]|$)') or get(r'(?:yours\s+(?:faithfully|sincerely|truly)|regards|sincerely)[,\s]+([A-Z][\w .&-]+?)(?:\n|$)') or get(r'(?:customer|reported by|submitted by)\s*[:\-]\s*([A-Z][\w .&-]+?)(?:[,\n]|$)') or get(r'^(.*?)\s+(?:had|reported|submitted|raised)\b'),
         # Do not use a broad "anything before inhaler" expression here: in
         # lower-case narrative text it can swallow prose such as "complaint
         # regarding their recent purchase of".  Anchor product forms to an
         # explicit product context instead.
-        'product_name': get(r'Product\s+Name\s*[:\-]\s*([^\n]+?)(?:\n|$)') or get(r'(?:purchase\s+of|product(?:\s+name)?\s*(?:is|:|\-)?|for)\s+([A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5}\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhalers?))'),
+        'product_name': get(r'Product\s+Name\s*[:\-]\s*([^\n]+?)(?:\n|$)') or get(r'(?:purchase\s+of|product(?:\s+name)?\s*(?:is|:|\-)?|(?:sealed\s+)?(?:bottle|pack|container)\s+of|for)\s+([A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5}\s+(?:Capsules?|Tablets?|Injection|Solution|Syrup|Cream|Ointment|Inhalers?))'),
         'product_strength': get(r'Strength\s*[:\-]\s*([\d.]+\s*(?:mg|mcg|g|ml|mL|%|IU)[^\n]*)') or get(r'([\d.]+\s*(?:mg|mcg|g|ml|mL|%|IU))'),
         # Prefer a full "batch number ... was VALUE" construction before the
         # shorter batch/lot form. This prevents the word "number" itself from
         # being recorded as a lot number.
         'batch_number': get(r'\b(?:batch|lot)\s+(?:number|no\.?)\b(?:\s+\w+){0,6}?\s+(?:was|is|:|#)\s*([A-Za-z0-9][A-Za-z0-9-]{2,})') or get(r'\b(?:batch|lot)\s*(?:[:#\-]\s*|\s+(?!(?:number|no\.?)\b))([A-Za-z0-9][A-Za-z0-9-]{2,})'),
-        'affected_quantity': get(r'Affected\s+Qty\s*[:\-]\s*([^\n]+?)(?:\n|$)') or get(r'(?:up\s*to|upto)\s+(\d+\s+\w+)') or get(r'(\d+\s+(?:capsules?|tablets?|packs?|units?|vials?|bottles?|products?))'),
+        'affected_quantity': get(r'Affected\s+Qty\s*[:\-]\s*([^\n]+?)(?:\n|$)') or get(r'(?:up\s*to|upto)\s+(\d+\s+\w+)') or get(r'(\d+\s+(?:(?:[a-z]+\s+){0,2})(?:capsules?|tablets?|packs?|units?|vials?|bottles?|products?))'),
         'manufacturing_date': get(r'Manufacturing\s*(?:Date)?\s*[:\-]\s*([^\n]+)') or get(r'(?:manufactur(?:ing|ed)|produced)\s+(?:date\s+(?:as|is|:)?\s*)?(?:in\s+)?([A-Za-z]+\s+\d{4}|[^\n.]+)'),
         'expiry_date': get(r'(?:Expiry|Expiration)\s*(?:Date)?\s*[:\-]\s*([^\n]+)') or get(r'expir(?:y|ing|ation|ed|es)\s+(?:date\s+(?:as|is|:)?\s*)?(?:on\s+|in\s+)?([A-Za-z]+\s+\d{4}|[^\n.]+)'),
         'originating_site': get(r'(?:originating\s+site|site\s+block)\s*[:\-]\s*([A-Za-z0-9][\w .-]+?)(?=[,\n.]|$)') or get(r'originated\s+from\s+([A-Za-z0-9][\w .-]+?)(?=[,\n.]|$)'),
@@ -109,8 +114,11 @@ def extract(s):
     if not s.get('current_complaint',{}).get('description') or any(w in low for w in ['reported','complaint','defect','contamination','discolor','broken','damaged','foreign']):
         x['description']=t
     if any(w in low for w in ['email','phone','portal','fax']): x['source']=x.get('source') or next((w.title() for w in ['email','phone','portal','fax'] if w in low),None)
-    if not x.get('complaint_type') and any(word in low for word in ['blister','damaged','broken','crushed','tube removed','tubes removed']):
-        x['complaint_type']='Packaging Damage'
+    if not x.get('complaint_type'):
+        if 'discolor' in low:
+            x['complaint_type']='Product Discoloration'
+        elif any(word in low for word in ['blister','damaged','broken','crushed','tube removed','tubes removed']):
+            x['complaint_type']='Packaging Damage'
     x={k:v for k,v in x.items() if v not in (None,'')}
     return {'extracted_complaint':x,'extraction_confidence':{k:.72 for k in x},'errors':['LLM unavailable; used local regex fallback.'], **_stage(s,'Complaint extracted')}
 def normalize(s):

@@ -115,7 +115,9 @@ export default function Settings() {
                   ? <span className="st-badge badge-ok"><CheckCircle2 size={11}/> Configured</span>
                   : <span className="st-badge badge-warn"><AlertCircle size={11}/> No API key</span>}
               </div>
-              <Row label="Model" value={info?.gemini_model ?? '—'} mono />
+              <Row label="Primary model" value={info?.gemini_model ?? '—'} mono />
+              <Row label="Fallback model" value={info?.gemini_fallback_model ?? '—'} mono />
+              <Row label="API base URL" value={info?.gemini_base_url ?? '—'} mono />
               {activeProvider === 'gemini' && <div className="st-active-tag">● Active</div>}
             </div>
           </div>

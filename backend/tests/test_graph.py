@@ -27,6 +27,18 @@ def test_narrative_batch_reference_does_not_capture_the_rest_of_the_complaint():
     assert extracted['batch_number'] != text[text.index('AMX240602'):]
     assert extracted['description']==text
 
+def test_email_style_narrative_extracts_customer_and_product_from_explicit_context():
+    text=(
+        'Apollo Pharmacy reported that 12 discolored capsules were found in a sealed bottle of '
+        'Amoxicillin Capsules 500 mg. The complaint was received by email for batch AMX240602, '
+        'manufactured in March 2026 and expiring in February 2028.'
+    )
+    extracted=complaint_graph.invoke({'raw_input':text, 'source_type':'text','stages':[]})['final_response']['extracted_complaint']
+    assert extracted['customer_name']=='Apollo Pharmacy'
+    assert extracted['product_name']=='Amoxicillin Capsules'
+    assert extracted['affected_quantity']=='12 discolored capsules'
+    assert extracted['complaint_type']=='Product Discoloration'
+
 def test_unlabelled_narrative_fallback_extracts_evidence_based_complaint_fields():
     text=(
         'english medicals had a complaint regarding their recent purchase of asthalin inhalers '

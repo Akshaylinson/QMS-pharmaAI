@@ -126,6 +126,8 @@ def settings_info():
         'llm_provider': settings.llm_provider,
         'groq_model': settings.groq_model,
         'gemini_model': settings.gemini_model,
+        'gemini_fallback_model': settings.gemini_fallback_model,
+        'gemini_base_url': settings.gemini_base_url,
         'groq_configured': bool(settings.groq_api_key),
         'gemini_configured': bool(settings.gemini_api_key),
         'database_url': settings.database_url.split('@')[-1] if '@' in settings.database_url else settings.database_url,

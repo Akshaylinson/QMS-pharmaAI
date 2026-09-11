@@ -29,10 +29,10 @@ The application is an **AI-assisted intake tool**, not an autonomous quality or 
              |                  Typed LangGraph workflow
              |                         |
              |                  provider abstraction
-             |                  /                  \
-             v                 v                    v
-        local parsing     Groq API             Google Gemini API
-          fallback       (optional)              (optional)
+             |                    /                    \
+             v                   v                      v
+        local parsing       Gemini 3.7 Flash       Gemini 2.5 Flash
+          fallback             (primary)              (fallback)
 ```
 
 The Docker deployment consists of three services:
@@ -159,8 +159,8 @@ The only LLM-dependent graph node is extraction. `ExtractionOutput` is a Pydanti
 
 `BaseLLMProvider` exposes `structured(prompt, schema)`. The selected implementation is determined server-side:
 
-- `LLM_PROVIDER=groq` with `GROQ_API_KEY` selects `ChatGroq` and `GROQ_MODEL`.
-- `LLM_PROVIDER=gemini` with `GEMINI_API_KEY` selects `ChatGoogleGenerativeAI` and `GEMINI_MODEL`.
+- `LLM_PROVIDER=gemini` with `GEMINI_API_KEY` selects `ChatGoogleGenerativeAI`. It first calls `GEMINI_MODEL` (`gemini-3.7-flash` by default), then retries with `GEMINI_FALLBACK_MODEL` (`gemini-2.5-flash`) using the same key and Gemini API base URL.
+- `LLM_PROVIDER=groq` with `GROQ_API_KEY` remains available as an optional alternative.
 - No valid configured provider, or an extraction exception, selects the local regex fallback. The result explicitly includes `LLM unavailable; used local regex fallback.`
 
 This separation keeps LangGraph business logic independent from either vendor and prevents keys from reaching the browser. The rest of the graph—normalization, completeness, risk, root-cause, CAPA, and summary—is deterministic in this version, which makes outcomes explainable and testable even without credentials.
@@ -219,9 +219,11 @@ All environment-specific values are configuration, not source code:
 | `VITE_API_BASE_URL` | API base URL baked into the frontend build, normally `http://localhost:8000/api`. |
 | `DATABASE_URL` | SQLAlchemy connection URL. Compose uses the internal `db` hostname. |
 | `FRONTEND_ORIGIN` | Allowed frontend origin used by CORS configuration. |
-| `LLM_PROVIDER` | `groq` or `gemini`. |
+| `LLM_PROVIDER` | `gemini` (default) or `groq`. |
 | `GROQ_API_KEY`, `GROQ_MODEL` | Groq credentials/model; default model is `llama-3.1-8b-instant`. |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | Gemini credentials/model; default model is `gemini-2.5-flash`. |
+| `GEMINI_API_KEY` | Shared Gemini credential for both models. |
+| `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | Primary `gemini-3.7-flash` and fallback `gemini-2.5-flash`. |
+| `GEMINI_BASE_URL` | Gemini API host; defaults to `https://generativelanguage.googleapis.com`. |
 
 For Docker development, copy `.env.example` to `.env` and run `docker compose up --build`. Open the web application at `http://localhost:5173`, FastAPI interactive documentation at `http://localhost:8000/docs`, and health status at `http://localhost:8000/health`.
 

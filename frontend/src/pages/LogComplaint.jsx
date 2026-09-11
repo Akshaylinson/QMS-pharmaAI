@@ -1,10 +1,11 @@
-import {useRef,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {useDispatch,useSelector} from 'react-redux';
-import {runIntake,saveComplaint,reset,loadComplaints,loadDashboard} from '../store';
+import {runIntake,saveComplaint,restoreDraft,reset,loadComplaints,loadDashboard} from '../store';
 import {api} from '../services/api';
 import {FlaskConical,Paperclip,Send,Check,CheckCircle2,XCircle,ShieldCheck,FileText,UserRound,Sparkles,RotateCcw,Lightbulb,ListChecks,FileCheck2} from 'lucide-react';
 
 const WELCOME='Ready to process new complaints. Paste the customer email, describe the issue, or upload a complaint report. I\u2019ll extract the facts and run an initial risk assessment.';
+const DRAFT_STORAGE_KEY='aivoa.complaint-intake-draft.v1';
 
 // All fields that must be filled before saving
 const REQUIRED_FIELDS=[
@@ -40,8 +41,32 @@ export default function LogComplaint(){
   const [fillText,setFillText]=useState('');
   const [directValues,setDirectValues]=useState({});
   const [dragging,setDragging]=useState(false);
+  const [draftHydrated,setDraftHydrated]=useState(false);
   const fileInput=useRef();
   const textareaRef=useRef();
+
+  // Keep a draft only while this complaint is being prepared. Every Copilot
+  // request already receives `form` as currentComplaint; persistence makes
+  // that context survive a refresh without storing it on the server.
+  useEffect(()=>{
+    try{
+      const saved=localStorage.getItem(DRAFT_STORAGE_KEY);
+      if(saved){
+        const draft=JSON.parse(saved);
+        if(draft&&typeof draft==='object'&&!Array.isArray(draft)) dispatch(restoreDraft(draft));
+      }
+    }catch{localStorage.removeItem(DRAFT_STORAGE_KEY);}
+    setDraftHydrated(true);
+  },[dispatch]);
+
+  useEffect(()=>{
+    if(!draftHydrated)return;
+    const hasIntakeValue=Object.entries(form).some(([key,value])=>key!=='status'&&value!==''&&value!==null&&value!==undefined);
+    try{
+      if(hasIntakeValue) localStorage.setItem(DRAFT_STORAGE_KEY,JSON.stringify(form));
+      else localStorage.removeItem(DRAFT_STORAGE_KEY);
+    }catch{/* Storage can be disabled; intake continues with in-memory state. */}
+  },[draftHydrated,form]);
 
   const missingRequired=REQUIRED_FIELDS.filter(([key])=>!form[key]);
   const allComplete=missingRequired.length===0;
@@ -124,12 +149,12 @@ export default function LogComplaint(){
     await process(text);
   }
 
-  function handleReset(){dispatch(reset());setMessages([welcomeMsg()]);setNotice('');}
+  function handleReset(){localStorage.removeItem(DRAFT_STORAGE_KEY);dispatch(reset());setMessages([welcomeMsg()]);setNotice('');}
 
   function dismissDialog(){
     const successful=dialog?.type==='success';
     setDialog(null);
-    if(successful){dispatch(reset());setMessages([welcomeMsg()]);setNotice('');}
+    if(successful){localStorage.removeItem(DRAFT_STORAGE_KEY);dispatch(reset());setMessages([welcomeMsg()]);setNotice('');}
   }
 
   return (
