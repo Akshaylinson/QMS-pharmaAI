@@ -44,6 +44,7 @@ export default function LogComplaint(){
   const [draftHydrated,setDraftHydrated]=useState(false);
   const fileInput=useRef();
   const textareaRef=useRef();
+  const isProcessing=loading||Boolean(notice);
 
   // Keep a draft only while this complaint is being prepared. Every Copilot
   // request already receives `form` as currentComplaint; persistence makes
@@ -262,6 +263,13 @@ export default function LogComplaint(){
                   {item.updates?.length>0&&<small>Updated: {item.updates.map(label).join(', ')}</small>}
                 </div>
             )}
+            {isProcessing&&<div className="assistant-message processing-message" role="status" aria-live="polite">
+              <span className="message-icon processing-icon"><Sparkles size={19}/></span>
+              <div className="processing-bubble">
+                <span>{notice||'Analyzing complaint details and preparing the initial assessment'}</span>
+                <span className="processing-dots" aria-hidden="true"><i/><i/><i/></span>
+              </div>
+            </div>}
           </div>
 
           <div className={`message-box ${dragging?'dragging':''}`}
